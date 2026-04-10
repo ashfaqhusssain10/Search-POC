@@ -124,10 +124,19 @@
 
 ## Fragile Areas
 
-**LLM-based variant matching (generate_variants.py):**
+**LLM-based variant matching (generate_variants.py) — IN PROGRESS:**
 - Files: `scripts/generate_variants.py` (lines 135-181)
-- Why fragile: Depends on GPT-4o-mini producing valid JSON; no schema validation on response; category hints hardcoded (line 92-109); prompt changes break parsing
-- Safe modification: Add response schema validation; test with sample data before full run; log all LLM inputs/outputs to debug file; version control prompt templates
+- Status: Root causes diagnosed; redesign in progress (spec: `docs/superpowers/specs/2026-04-10-variant-matching-redesign.md`)
+- Root causes identified:
+  1. 30+ DynamoDB category values don't map to `CATEGORY_CANDIDATES` keys, so LLM receives unfiltered 774-candidate pool (lines 92-109)
+  2. Prompt only supplies item name, category, and type — no ingredients or form data
+  3. Binary yes/no response format with no score threshold
+- Pending implementation:
+  - `scripts/generate_variants.py` needs `CATEGORY_NORMALIZE` map (DynamoDB category → candidate key) and scored prompt (0.0–1.0 float, threshold 0.8)
+  - `scripts/load_items.py` needs to write `llm_description` field populated by enrichment step
+- Step 1 complete: `scripts/enrich_items.py` enriches CSVs with Gemini-generated structured descriptions
+- Steps 2–3 not yet implemented
+- Safe modification: Do not modify `generate_variants.py` independently of the redesign spec; test with sample data per category after each step
 - Test coverage: No unit tests for variant matching logic; no validation of JSON response shape; no tests for category filtering logic
 
 **Community name derivation (generate_summaries.py):**

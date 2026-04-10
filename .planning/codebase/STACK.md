@@ -24,8 +24,10 @@
 
 **AI/Embeddings:**
 - OpenAI API 1.30.0+ - LLM client for GPT-4o-mini (summaries) and text-embedding-3-small (vector embeddings)
+- google-genai 1.0.0+ - Google Generative AI SDK for Gemini models; used in `scripts/enrich_items.py` with gemini-2.5-flash
 
 **Data Processing:**
+- pandas 2.0.0+ - DataFrame-based data manipulation and transformation
 - NetworkX 3.0+ - Graph algorithms for community detection
 - Graspologic 3.3.0+ - Graph learning and visualization utilities
 
@@ -41,9 +43,11 @@
 - neo4j (5.14.0+) - Graph database connectivity for storing dishes, platters, communities, and relationships
 - qdrant-client (1.8.0+) - Vector search engine for embedding-based dish similarity queries
 - openai (1.30.0+) - LLM integration for generating community narratives and embeddings
+- google-genai (1.0.0+) - Gemini API integration for item enrichment via gemini-2.5-flash
 - boto3 (1.34.0+) - AWS DynamoDB access for canonical dish and platter data
 - networkx (3.0+) - Community detection algorithms (Louvain method implied in scripts)
 - graspologic (3.3.0+) - Graph learning operations for community analysis
+- pandas (2.0.0+) - Tabular data processing and transformation across ETL scripts
 
 **Supporting:**
 - python-dotenv (1.0.0+) - Configuration management via environment variables
@@ -60,6 +64,7 @@
   - `QDRANT_PORT` - Vector database port (default: 6333)
   - `QDRANT_API_KEY` - Optional Qdrant API key
   - `OPENAI_API_KEY` - OpenAI API key (required)
+  - `GEMINI_API_KEY` - Google Gemini API key (required for item enrichment)
   - `AWS_REGION` - AWS region (default: ap-south-1)
   - `PLATTERS_TABLE` - DynamoDB platter table name
   - `VARIATIONS_TABLE` - DynamoDB variations table name
@@ -90,6 +95,7 @@
 - Network access to Neo4j instance (bolt://localhost:7687 default)
 - Network access to Qdrant instance (localhost:6333 default)
 - Network access to OpenAI API (https://api.openai.com)
+- Network access to Google Gemini API (https://generativelanguage.googleapis.com)
 - Network access to AWS DynamoDB (ap-south-1 default)
 - Valid AWS credentials (via ~/.aws/credentials or environment variables)
 - .env file with required secrets
@@ -100,6 +106,7 @@
 - Persistent Qdrant instance (vector database)
 - AWS DynamoDB access (external, pre-existing tables)
 - OpenAI API key with embedding and chat model access
+- Google Gemini API key with gemini-2.5-flash access
 - Configuration via environment variables
 
 ---

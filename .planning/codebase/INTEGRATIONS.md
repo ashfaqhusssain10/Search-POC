@@ -12,6 +12,12 @@
   - Auth: `OPENAI_API_KEY` environment variable
   - Rate limiting: Built-in retry logic with 2-second delays in `scripts/generate_summaries.py` and `scripts/index_communities.py`
 
+- Google Gemini API - Used for:
+  - Enriching item data via `scripts/enrich_items.py`
+  - Model: `gemini-2.5-flash`
+  - SDK/Client: `google-genai` (1.0.0+) via `genai.Client`
+  - Auth: `GEMINI_API_KEY` environment variable (exported from `core/settings.py`)
+
 ## Data Storage
 
 **Databases:**
@@ -36,6 +42,7 @@
   - Platter loading: `scripts/load_platters.py` - Scans DynamoDB tables, creates Platter nodes and CONTAINS edges
   - Community detection: `scripts/build_community_edges.py` + `scripts/detect_communities.py` - Builds graph, runs Louvain algorithm
   - Summary generation: `scripts/generate_summaries.py` - Fetches communities, calls GPT-4o-mini, stores summary_json
+  - Item enrichment: `scripts/enrich_items.py` - Calls Gemini API to enrich item data, stores results back to Neo4j
 
 **Vector Database (Qdrant):**
 - Purpose: Enables semantic search of dish communities by embedding similarity
@@ -66,11 +73,12 @@
 - Custom: Environment variable-based secrets
   - Neo4j: User/password in `.env`
   - OpenAI: API key in `.env`
+  - Gemini: API key in `.env` (`GEMINI_API_KEY`)
   - AWS: Via ~/.aws/credentials or `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` environment variables
   - Qdrant: Optional API key in `.env`
 
 **Implementation:**
-- Centralized in `core/settings.py` - Loads `.env` using python-dotenv
+- Centralized in `core/settings.py` - Loads `.env` using python-dotenv; exports `GEMINI_API_KEY`
 - Singleton clients in `core/connections.py` - Lazy initialization with global references
 
 ## Monitoring & Observability
@@ -94,7 +102,7 @@
 
 **Deployment Notes:**
 - Scripts intended to be run locally or on a compute instance with:
-  - Network access to Neo4j, Qdrant, OpenAI, and AWS
+  - Network access to Neo4j, Qdrant, OpenAI, Gemini, and AWS
   - Environment variables configured
   - Virtual environment with dependencies installed
 
@@ -103,6 +111,7 @@
 **Required env vars (must be set):**
 - `NEO4J_PASSWORD` - Critical for graph database
 - `OPENAI_API_KEY` - Critical for embeddings and LLM
+- `GEMINI_API_KEY` - Critical for item enrichment via Gemini API
 
 **Optional env vars (have defaults):**
 - `NEO4J_URI` - Default: bolt://localhost:7687
