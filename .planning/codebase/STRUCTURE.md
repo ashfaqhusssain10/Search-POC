@@ -1,6 +1,6 @@
 # Codebase Structure
 
-**Analysis Date:** 2026-04-10
+**Analysis Date:** 2026-04-14
 
 ## Directory Layout
 
@@ -16,7 +16,8 @@ SearchPOC/
 │   ├── load_items.py         # Step 1: Load canonical and alias items into Neo4j
 │   ├── load_platters.py      # Step 2: Load platters from DynamoDB
 │   ├── generate_variants.py  # Step 3: Scored LLM variant matching
-│   ├── detect_communities.py # Step 4: Leiden clustering
+│   ├── add_canonical_bridges.py # Step 3b: Qdrant-based canonical↔canonical BRIDGE_TO edges
+│   ├── detect_communities.py # Step 4: Weighted Leiden clustering (VARIANT_OF + BRIDGE_TO)
 │   ├── generate_summaries.py # Step 5: LLM narratives per community
 │   ├── build_community_edges.py # Step 6: Precompute platter coverage
 │   ├── index_communities.py  # Step 7: Embed + Qdrant index
@@ -24,7 +25,10 @@ SearchPOC/
 │   └── inspect_dynamo.py     # Utility: DynamoDB inspection
 ├── llm_cache/                 # Gitignored — cached raw LLM responses
 │   ├── enrichment/           # Gemini responses from enrich_items.py
-│   └── variants/             # OpenAI responses from generate_variants.py
+│   ├── variants/             # OpenAI responses from generate_variants.py
+│   └── dry_run_bridges.json  # Dry-run plan written by add_canonical_bridges.py
+├── memory/                    # Long-form notes and semantic decision records
+│   └── feedback_bridge_semantics.md  # Why BRIDGE_TO is loose alternative-similarity
 ├── docs/                      # Design documents and specs
 │   └── superpowers/
 │       └── specs/
@@ -47,17 +51,22 @@ SearchPOC/
 
 **scripts/**
 - Purpose: Executable Python modules for ETL pipeline and query-time search
-- Contains: 8 ETL steps (Step 0 through Step 7) + 1 query entry point + 1 utility
+- Contains: 9 ETL steps (Step 0 through Step 7, plus Step 3b) + 1 query entry point + 1 utility
 - Key files: All `*.py` files are runnable as `python -m scripts.<name>`
-- Pipeline order: `enrich_items` → `load_items` → `load_platters` → `generate_variants` → `detect_communities` → `generate_summaries` → `build_community_edges` → `index_communities`
+- Pipeline order: `enrich_items` → `load_items` → `load_platters` → `generate_variants` → `add_canonical_bridges` → `detect_communities` → `generate_summaries` → `build_community_edges` → `index_communities`
 
 **llm_cache/**
-- Purpose: Persist raw LLM API responses for debugging and idempotent re-runs
-- Generated: Yes — created automatically by `enrich_items.py` and `generate_variants.py`
+- Purpose: Persist raw LLM API responses for debugging and idempotent re-runs, plus dry-run artifacts
+- Generated: Yes — created automatically by `enrich_items.py`, `generate_variants.py`, and `add_canonical_bridges.py`
 - Committed: No (gitignored)
 - Sub-directories:
   - `llm_cache/enrichment/`: One JSON file per batch from `enrich_items.py` (named `dynamodb_<offset>.json`, `supabase_<offset>.json`)
   - `llm_cache/variants/`: One JSON file per category batch from `generate_variants.py` (named `<Category>_<offset>.json`)
+  - `llm_cache/dry_run_bridges.json`: Last dry-run plan from `add_canonical_bridges.py` (canonical → top-K neighbor list with cosine scores); inspected before running with `--commit`
+
+**memory/**
+- Purpose: Long-form decision notes that survive across sessions and inform agent behavior
+- Key files: `feedback_bridge_semantics.md` — defines BRIDGE_TO as alternative-similarity (cross-ingredient bridges within `veg_type+form` are acceptable; do NOT add ingredient-overlap filters)
 
 **docs/superpowers/specs/**
 - Purpose: Design specs and architectural decision records
@@ -81,7 +90,8 @@ SearchPOC/
 - `scripts/load_items.py`: `main()` at line 286 — loads Item nodes from enriched CSV
 - `scripts/load_platters.py`: `main()` at line 86 — loads Platter nodes from DynamoDB
 - `scripts/generate_variants.py`: `main()` — scored LLM variant matching
-- `scripts/detect_communities.py`: `main()` at line 187 — Leiden clustering
+- `scripts/add_canonical_bridges.py`: `main()` — Qdrant-driven BRIDGE_TO edges; supports `--commit` flag (dry-run by default)
+- `scripts/detect_communities.py`: `main()` — weighted Leiden clustering on VARIANT_OF (1.0) + BRIDGE_TO (0.5)
 - `scripts/generate_summaries.py`: `main()` — Per-community LLM narrative
 - `scripts/build_community_edges.py`: `main()` at line 36 — Precompute coverage edges
 - `scripts/index_communities.py`: `main()` — Embed communities to Qdrant
@@ -99,7 +109,8 @@ SearchPOC/
 **Core Logic:**
 - `scripts/search.py` (lines 76-98): `find_communities()` — Qdrant cosine search
 - `scripts/search.py` (lines 129-164): `rank_platters()` — Neo4j platter ranking query
-- `scripts/detect_communities.py` (lines 50-108): Leiden clustering, isolated node handling
+- `scripts/detect_communities.py` (lines 50-108): Weighted Leiden clustering, isolated node handling, max-merge of VARIANT_OF and BRIDGE_TO weights
+- `scripts/add_canonical_bridges.py`: Per-canonical Qdrant query against `searchpoc_canonicals` with `veg_type+form` payload filter, TOP_K=3, threshold 0.80, score-gap 0.05, bidirectional MERGE
 - `scripts/generate_variants.py` (lines 61-100+): Scored LLM batch matching by category
 - `scripts/enrich_items.py` (lines 74-125): `enrich_batch()` — Gemini batch call with caching
 
@@ -131,6 +142,13 @@ SearchPOC/
 - `Community` — cluster of related items
 - Properties: `snake_case` (e.g., `item_type`, `min_price`, `summary_json`, `llm_description`)
 
+**Neo4j Edge Types:**
+- `VARIANT_OF` — canonical → alias, LLM-grounded (Leiden weight 1.0)
+- `BRIDGE_TO` — canonical ↔ canonical (DynamoDB only), Qdrant-grounded loose similarity (Leiden weight 0.5); has `score` property
+- `CONTAINS` — Platter → Item
+- `MEMBER_OF` — Item → Community
+- `HAS_COMMUNITY` — Platter → Community (precomputed)
+
 ## Where to Add New Code
 
 **New Batch Processing Step (ETL):**
@@ -144,6 +162,9 @@ SearchPOC/
 - Create: `scripts/enrich_*.py`
 - Follow pattern from `scripts/enrich_items.py`: batch calls, per-batch cache writes to `llm_cache/<name>/`, idempotent (skip already-enriched rows)
 - Cache dir constant: `CACHE_DIR = Path("llm_cache/<name>")` with `CACHE_DIR.mkdir(parents=True, exist_ok=True)` before write
+
+**New Graph-Mutating Script:**
+- Follow pattern from `scripts/add_canonical_bridges.py`: dry-run by default, `--commit` flag to mutate, write dry-run plan to `llm_cache/dry_run_<name>.json`, full-replace idempotency (delete existing edges of the type before writing)
 
 **New Query Operation:**
 - Create: Function in `scripts/search.py` or separate `scripts/query_*.py` file
@@ -191,4 +212,4 @@ SearchPOC/
 
 ---
 
-*Structure analysis: 2026-04-10*
+*Structure analysis: 2026-04-14*

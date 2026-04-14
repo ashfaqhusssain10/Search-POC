@@ -28,6 +28,18 @@
 - Impact: Malformed CSV can silently produce incomplete node data; silent failures on missing required fields; inconsistent state between DynamoDB and Supabase records
 - Fix approach: Add schema validation before loading; log skipped rows with reason; produce validation report
 
+**35 straggler VARIANT_OF edges (Neo4j ↔ Qdrant canonical drift):**
+- Issue: Neo4j currently holds 587 VARIANT_OF edges but the most recent `generate_variants.py` run committed 552. The 35 straggler edges originate from canonicals that exist in Neo4j as `Item {source: 'dynamodb'}` but are absent from the `searchpoc_canonicals` Qdrant collection.
+- Files: `scripts/generate_variants.py`, `scripts/embed_items.py`, `scripts/add_canonical_bridges.py` (lines 113-129)
+- Impact: Stragglers cannot receive `BRIDGE_TO` coverage (bridge retrieval uses Qdrant as source of truth) and are invisible to any tool driven off the Qdrant canonical collection. They become permanent island candidates in Leiden output.
+- Fix approach: Always re-run `embed_items.py` after `load_items.py` so Qdrant is in sync before `generate_variants.py` and `add_canonical_bridges.py` execute. Promote the warning in `add_canonical_bridges.warn_if_count_mismatch` to a hard error in `--commit` mode once steady state is reached.
+
+**Canonical ↔ Qdrant drift goes undetected at pipeline level:**
+- Issue: `add_canonical_bridges.warn_if_count_mismatch` (lines 113-129) only logs a WARNING when Neo4j DynamoDB Item count differs from Qdrant `searchpoc_canonicals` count. Nothing in the pipeline blocks on it.
+- Files: `scripts/add_canonical_bridges.py` (lines 113-129), `scripts/embed_items.py`
+- Impact: If `embed_items.py` is not re-run after `load_items.py`, `add_canonical_bridges.py` silently skips brand-new canonicals — they receive no `BRIDGE_TO` edges and inherit the straggler problem above.
+- Fix approach: Document `embed_items.py` as a hard prerequisite for `add_canonical_bridges.py` in pipeline runbook; promote warning to hard error in `--commit` mode.
+
 ---
 
 ## Known Bugs
@@ -150,6 +162,28 @@
 - Why fragile: Cypher query has no error handling; assumes all edges can be materialized (no memory limits); orphaned platters silently skipped
 - Safe modification: Add EXPLAIN plan check; log summary of matched/unmatched platters; verify edge counts match expected ratio
 - Test coverage: No verification that all platters got edges; no test for missing items
+
+**BRIDGE_TO semantics are intentionally loose — do NOT tighten with ingredient filters:**
+- Files: `scripts/add_canonical_bridges.py` (lines 136-194), `memory/feedback_bridge_semantics.md`
+- Why fragile: `BRIDGE_TO` is alternative-similarity, not equivalence. Cross-ingredient matches within the same `veg_type` + `form` are by-design acceptable (e.g. Papaya ↔ Banana, Chicken Pakoda ↔ Prawn Pakoda). The hard filter is `veg_type` + `form` only — there is intentionally no ingredient-overlap check.
+- Safe modification: If merges become too aggressive, raise the cosine `THRESHOLD` (currently 0.80) or shrink `SCORE_GAP` (currently 0.05). Do NOT add ingredient-overlap filters — that would defeat the alternative-similarity intent and re-fragment communities.
+- Test coverage: None; semantic correctness is enforced only by manual inspection of `llm_cache/dry_run_bridges.json` and the score histogram.
+
+**Leiden BRIDGE_TO weight (0.5) is load-bearing:**
+- Files: `scripts/detect_communities.py` (lines 42, 65-102)
+- Why fragile: `BRIDGE_TO_WEIGHT = 0.5` and `VARIANT_OF_WEIGHT = 1.0` ensure that vector-geometric canonical↔canonical similarity never dominates real alias evidence during Leiden partitioning. Lowering BRIDGE_TO weight raises singleton rate; raising it risks bad canonical merges where true alias signal exists.
+- Safe modification: Do not change `BRIDGE_TO_WEIGHT` without re-running `detect_communities.py` and comparing singleton count and max community size against the current baseline (132 communities, 18 singletons, max size 19). Spawn `searchpoc-architecture-reviewer` for any change here.
+- Test coverage: None; impact is observable only via post-run distribution metrics.
+
+---
+
+## Known Isolated Subgraphs
+
+**38 zero-edge canonicals (below_threshold LLM scores):**
+- File: `llm_cache/zero_edge_canonicals.json` (38 entries)
+- What: 38 DynamoDB canonicals received zero `VARIANT_OF` edges from `generate_variants.py` because every candidate scored below the 0.80 LLM threshold. Each entry records `canonical_id`, `canonical_name`, and `reason: "below_threshold"`.
+- Impact: These canonicals are alias-orphans. Their only path into multi-canonical communities is the `BRIDGE_TO` vector channel (`add_canonical_bridges.py`) — and only if their `veg_type` + `form` payload matches a sibling in `searchpoc_canonicals`. Anything that fails both paths becomes a permanent singleton community.
+- Fix approach: Periodically re-inspect this file after `generate_variants.py` runs; consider a lower secondary LLM pass for items in this list, or manual alias seeding for high-value names.
 
 ---
 
