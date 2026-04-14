@@ -3,10 +3,15 @@
   "depth": "quick",
   "parallelization": true,
   "commit_docs": true,
-  "model_profile": "balanced",
+  "model_profile": "budget",
   "workflow": {
-    "research": false,
+    "research": true,
     "plan_check": true,
-    "verifier": true
+    "verifier": true,
+    "auto_advance": false,
+    "nyquist_validation": true
+  },
+  "git": {
+    "branching_strategy": "none"
   }
 }
