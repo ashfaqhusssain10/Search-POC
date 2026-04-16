@@ -1,114 +1,66 @@
 # Technology Stack
 
-**Analysis Date:** 2026-04-10
+**Analysis Date:** 2026-04-15
 
-## Languages
+## Language & Runtime
 
-**Primary:**
-- Python 3.9.6 - Core application language for all scripts and data processing pipelines
+- **Python** ≥ 3.11 (CLAUDE.md references; local runtime 3.14)
+- **Package manager:** `pip` with `requirements.txt` (no lockfile, no `pyproject.toml`)
+- **Entry points:** `streamlit run app.py`, `python -m scripts.<name>`
 
-## Runtime
+## Core Dependencies
 
-**Environment:**
-- Python 3.9.6
+| Package | Version | Purpose |
+|---|---|---|
+| `neo4j` | ≥ 5.14.0 | Graph database driver (Items, Platters, Communities) |
+| `qdrant-client` | ≥ 1.8.0 | Vector database client (community embeddings) |
+| `openai` | ≥ 1.30.0 | `text-embedding-3-small` (1536-dim, cosine) |
+| `google-genai` | ≥ 1.0.0 | Gemini LLM for enrichment, variant scoring, summaries |
+| `graspologic` | ≥ 3.3.0 | Hierarchical Leiden community detection |
+| `networkx` | ≥ 3.0 | Graph construction for Leiden input |
+| `boto3` | ≥ 1.34.0 | DynamoDB client (source data scans) |
+| `pandas` | ≥ 2.0.0 | CSV loading / transformation |
+| `rapidfuzz` | ≥ 3.0.0 | Fuzzy string matching (alias mining, canonical resolution) |
+| `streamlit` | ≥ 1.35.0 | Interactive web UI (`app.py`) |
+| `python-dotenv` | ≥ 1.0.0 | `.env` loading |
 
-**Package Manager:**
-- pip
-- Lockfile: requirements.txt (present, pinned versions)
-
-## Frameworks
-
-**Core Infrastructure:**
-- Neo4j Python driver 5.14.0+ - Graph database client for dish/community/platter relationships
-- Qdrant client 1.8.0+ - Vector database client for semantic search via embeddings
-
-**AI/Embeddings:**
-- OpenAI API 1.30.0+ - LLM client for GPT-4o-mini (summaries) and text-embedding-3-small (vector embeddings)
-- google-genai 1.0.0+ - Google Generative AI SDK for Gemini models; used in `scripts/enrich_items.py` with gemini-2.5-flash
-
-**Data Processing:**
-- pandas 2.0.0+ - DataFrame-based data manipulation and transformation
-- NetworkX 3.0+ - Graph algorithms for community detection
-- Graspologic 3.3.0+ - Graph learning and visualization utilities
-
-**AWS:**
-- boto3 1.34.0+ - AWS SDK for DynamoDB table scanning and data retrieval
-
-**Utilities:**
-- python-dotenv 1.0.0+ - Environment variable loading from .env files
-
-## Key Dependencies
-
-**Critical:**
-- neo4j (5.14.0+) - Graph database connectivity for storing dishes, platters, communities, and relationships
-- qdrant-client (1.8.0+) - Vector search engine for embedding-based dish similarity queries
-- openai (1.30.0+) - LLM integration for generating community narratives and embeddings
-- google-genai (1.0.0+) - Gemini API integration for item enrichment via gemini-2.5-flash
-- boto3 (1.34.0+) - AWS DynamoDB access for canonical dish and platter data
-- networkx (3.0+) - Community detection algorithms (Louvain method implied in scripts)
-- graspologic (3.3.0+) - Graph learning operations for community analysis
-- pandas (2.0.0+) - Tabular data processing and transformation across ETL scripts
-
-**Supporting:**
-- python-dotenv (1.0.0+) - Configuration management via environment variables
+See [requirements.txt](requirements.txt).
 
 ## Configuration
 
-**Environment:**
-- Loaded via `core/settings.py` from `.env` file using python-dotenv
-- Key required variables:
-  - `NEO4J_URI` - Bolt connection string (e.g., bolt://localhost:7687)
-  - `NEO4J_USER` - Neo4j database user (default: neo4j)
-  - `NEO4J_PASSWORD` - Neo4j database password
-  - `QDRANT_HOST` - Vector database host (default: localhost)
-  - `QDRANT_PORT` - Vector database port (default: 6333)
-  - `QDRANT_API_KEY` - Optional Qdrant API key
-  - `OPENAI_API_KEY` - OpenAI API key (required)
-  - `GEMINI_API_KEY` - Google Gemini API key (required for item enrichment)
-  - `AWS_REGION` - AWS region (default: ap-south-1)
-  - `PLATTERS_TABLE` - DynamoDB platter table name
-  - `VARIATIONS_TABLE` - DynamoDB variations table name
-  - `DYNAMODB_CSV` - CSV file path for DynamoDB master data
-  - `SUPABASE_CSV` - CSV file path for Supabase master data
+**Loaded via `python-dotenv`** in [core/settings.py](core/settings.py) from `.env` at repo root.
 
-**Hardcoded Configuration (in `core/settings.py`):**
-- `QDRANT_COLLECTION = "item_search_communities"` - Vector collection name
-- `EMBEDDING_MODEL = "text-embedding-3-small"` - OpenAI embedding model
-- `EMBEDDING_DIM = 1536` - Vector dimension for embeddings
-- `QDRANT_SCORE_THRESHOLD = 0.35` - Cosine similarity threshold for search results
+**Required env vars (fail at import if missing):**
+- `NEO4J_URI`, `NEO4J_PASSWORD`
+- `OPENAI_API_KEY`, `GEMINI_API_KEY`
 
-## Build/Runtime Tools
+**Optional env vars (with defaults):**
+- `NEO4J_USER` (default: `neo4j`)
+- `QDRANT_HOST` (default: `localhost`), `QDRANT_PORT` (default: `6333`), `QDRANT_API_KEY`
+- `DYNAMODB_CSV`, `SUPABASE_CSV` (default filenames for CSV sources)
 
-**Entry Point Pattern:**
-- Scripts run via `python -m scripts.<module_name>` pattern
-- Located in: `scripts/` directory
-- Core utilities in: `core/` directory
+**Hardcoded constants** in `core/settings.py`:
+- `QDRANT_COLLECTION = "item_search_communities"`
+- `EMBEDDING_MODEL = "text-embedding-3-small"`
+- `EMBEDDING_DIM = 1536`
+- `QDRANT_SCORE_THRESHOLD = 0.35`
 
-**Development/Local Setup:**
-- Virtual environment: `venv/` directory present
-- No build step required (pure Python)
+**ETL-level constants** (guarded by CLAUDE.md — do not change without architecture review):
+- Leiden: `resolution=1.0`, `max_cluster_size=20`, `VARIANT_OF_WEIGHT=1.0`, `BRIDGE_TO_WEIGHT=0.5`
+- Batch sizes: 500 nodes (Neo4j), 50 communities (Qdrant embed/upsert), 50 (Gemini enrichment)
 
-## Platform Requirements
+## Build / Tooling
 
-**Development:**
-- Python 3.9+
-- Network access to Neo4j instance (bolt://localhost:7687 default)
-- Network access to Qdrant instance (localhost:6333 default)
-- Network access to OpenAI API (https://api.openai.com)
-- Network access to Google Gemini API (https://generativelanguage.googleapis.com)
-- Network access to AWS DynamoDB (ap-south-1 default)
-- Valid AWS credentials (via ~/.aws/credentials or environment variables)
-- .env file with required secrets
+- **No linter / formatter configured** (no `ruff`, `black`, `.editorconfig`)
+- **No CI config** in repo
+- **No test framework** — validation is inline / via manual eval scripts
+- **Git** — standard Git repo on `main` branch
 
-**Production:**
-- Python 3.9+ runtime
-- Persistent Neo4j instance (graph database)
-- Persistent Qdrant instance (vector database)
-- AWS DynamoDB access (external, pre-existing tables)
-- OpenAI API key with embedding and chat model access
-- Google Gemini API key with gemini-2.5-flash access
-- Configuration via environment variables
+## Frontend
+
+- **Streamlit 1.35+** single-file app ([app.py](app.py))
+- `@st.cache_data` used for canonical item loading (no TTL configured)
+- No separate JavaScript/CSS
 
 ---
-
-*Stack analysis: 2026-04-10*
+*Stack analysis: 2026-04-15*

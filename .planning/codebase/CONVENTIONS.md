@@ -1,137 +1,131 @@
-# Coding Conventions
+# Code Conventions
 
-**Analysis Date:** 2026-04-10
+**Analysis Date:** 2026-04-15
 
-## Naming Patterns
+## Language & Style
 
-**Files:**
-- Lowercase with underscores for script files: `load_items.py`, `generate_variants.py`, `search.py`
-- Core modules follow same pattern: `settings.py`, `connections.py`
-- `__init__.py` used for package initialization (currently empty in `/core` and `/scripts`)
+- **Python** with modern syntax: `X | None` unions, `list[str]`, `dict[str, Any]` (PEP 585/604)
+- **Type hints** on all public function signatures (per CLAUDE.md requirement)
+- **Docstrings:** one-liner for simple functions, full multi-line for complex ones (e.g. `rank_platters()`)
+- **No formatter configured** — style is hand-enforced, trends toward PEP 8
+- **Line length:** soft ~100 chars; no strict limit
+- **Imports:** grouped — stdlib, third-party, local — with blank lines between groups
 
-**Functions:**
-- Lowercase with underscores: `normalize_category()`, `parse_meal_types()`, `get_neo4j_driver()`
-- Descriptive names indicating action: `load_dynamodb_items()`, `embed_query()`, `rank_platters()`
-- Helper functions prefixed with underscore: `_safe_float()`, `_count_rows()`, `_str()`, `_float_or_none()`
-- Context manager functions use `snake_case`: `neo4j_session()`, `build_networkx_graph()`
+Example import block ([scripts/search.py:17](scripts/search.py#L17)):
+```python
+import json
+import logging
+import sys
+from collections import Counter
+from dataclasses import dataclass, field
 
-**Variables:**
-- Lowercase with underscores: `category_map`, `node_to_community`, `embedding_model`
-- Constants in UPPERCASE: `MAX_RETRIES`, `BATCH_SIZE`, `EMBEDDING_DIM`, `QDRANT_SCORE_THRESHOLD`
-- Dictionary/mapping suffixes: `category_map`, `community_name_map`, `by_category`
-- Prefixes for private/internal: Single underscore for module-level private state (`_neo4j_driver`, `_qdrant_client`)
+from openai import OpenAI
+from qdrant_client.models import FieldCondition, Filter, MatchAny
 
-**Types:**
-- Union types use pipe syntax: `str | None`, `dict[str, str]`
-- Imported type hints: `list[dict[str, Any]]`, `Generator[Session, None, None]`
-- Dict keys are often string tuples in payloads: `{"canonical_id": str, "variant_ids": list}`
-- Return type hints on all functions: `-> list[PlatterResult]`, `-> None`
+from core.categories import build_category_family_counts, category_family
+from core.connections import close_connections, get_qdrant_client, neo4j_session
+from core.settings import EMBEDDING_MODEL, OPENAI_API_KEY
+```
 
-## Code Style
+## Naming
 
-**Formatting:**
-- No explicit formatter detected (no `.prettierrc`, `black` config, or `ruff` rules found)
-- Code uses consistent 4-space indentation
-- String quotes: Double quotes preferred (`"string"`)
-- Line length not strictly enforced but generally under 100 characters
-- Imports organized by sections (stdlib, third-party, local)
+- **Files / modules:** `snake_case.py`
+- **Functions:** `snake_case` — prefixes signal intent:
+  - `fetch_*`, `scan_*`, `query_*` — I/O bound reads
+  - `build_*`, `compute_*` — pure transformation
+  - `load_*`, `index_*`, `generate_*` — pipeline steps (write to sinks)
+  - `_helper()` — private/internal
+- **Constants:** `SCREAMING_SNAKE_CASE`, module-level
+- **Cypher queries:** module-level `SCREAMING_SNAKE_CASE` string constants (e.g. `RANK_PLATTERS_QUERY`, `FETCH_VARIANT_OF_EDGES`)
+- **Data classes:** `PascalCase` (e.g. `PlatterResult`)
+- **Variables:** `snake_case`; domain-specific shorthand accepted (`rec`, `hit`, `vec`)
+- **No custom exception classes** — codebase uses built-ins only
 
-**Linting:**
-- No `.eslintrc`, `.pylintrc`, or `pyproject.toml` found — no enforced linting
-- Code follows general PEP 8 conventions informally
+## Module Structure
 
-## Import Organization
+Typical script layout:
+1. Module docstring (purpose + usage examples)
+2. `import` block
+3. `logging.basicConfig(...)` + `log = logging.getLogger(__name__)`
+4. Module-level constants (batch sizes, weights, thresholds)
+5. Dataclass definitions (if any)
+6. Cypher query constants
+7. Functions, grouped by pipeline step with `# ---` separator comments
+8. `main()` function
+9. `if __name__ == "__main__": main()` block
 
-**Order:**
-1. Standard library: `import os`, `import sys`, `import json`, `import csv`, `import logging`, `from pathlib import Path`, `from contextlib import contextmanager`, `from typing import ...`
-2. Third-party: `from neo4j import ...`, `from qdrant_client import ...`, `from openai import ...`, `from dotenv import load_dotenv`, `import boto3`, `import networkx as nx`, `from graspologic.partition import ...`
-3. Local: `from core.connections import ...`, `from core.settings import ...`
-
-**Path Aliases:**
-- No path aliases detected; all local imports use full relative paths: `from core.settings import ...`, `from scripts.search import search_platters`
+Scripts close connections in `finally`:
+```python
+try:
+    main()
+finally:
+    close_connections()
+```
 
 ## Error Handling
 
-**Patterns:**
-- Catch specific exceptions, not broad `Exception` alone:
-  - `except (json.JSONDecodeError, KeyError)` in `/scripts/load_items.py:88-93`
-  - `except (ValueError, TypeError)` in `/scripts/load_items.py:144-146`
-  - `except (BotoCoreError, ClientError)` in `/scripts/load_platters.py:166-168`
-- Retry logic with exponential backoff concept:
-  - `MAX_RETRIES = 3`, `RETRY_DELAY = 2.0` constants defined at module level
-  - Loop with attempt counter: `for attempt in range(1, MAX_RETRIES + 1)` in `/scripts/generate_variants.py:156` and `/scripts/index_communities.py:99`
-  - Re-raise after max retries: `raise RuntimeError(...)` in `/scripts/index_communities.py:110`
-- Graceful fallback on parse failure:
-  - Return empty list or None on error: `return []` in `/scripts/generate_variants.py:174-175`
-  - Return default/empty value: `return None` in `/scripts/index_communities.py:140`
-- Interactive CLI wraps in try/except for cleanup:
-  - `try/except (KeyboardInterrupt, EOFError)` with `finally: close_connections()` in `/scripts/search.py:228-247`
+- **Fail-fast:** no broad `except Exception` — exceptions propagate and halt the pipeline
+- **LLM API retries:** exponential backoff (`MAX_RETRIES=3`, `RETRY_DELAY=2.0`), each retry logged with context
+- **Optional results:** functions like `find_best_community()` return `None` below threshold rather than raising
+- **Missing env vars:** `os.environ["KEY"]` (not `.get()`) — fails loudly at import if any required key is missing
+- **CSV parsing:** bad rows logged and skipped; processing continues
 
 ## Logging
 
-**Framework:** `logging` (Python standard library)
-
-**Patterns:**
-- Module-level logger: `log = logging.getLogger(__name__)` in every script
-- Basic config at module start: `logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")`
-- Log levels used:
-  - `log.info()` for progress and milestones: `"Loaded %d items"`, `"Wrote %d edges"`, `"Done."`
-  - `log.warning()` for recoverable issues: `"LLM attempt %d/%d failed"`, `"Invalid summary_json for %s — skipping"`
-  - `log.error()` for failures requiring attention: `"DynamoDB CSV not found"`, `"Failed to generate summary"`
-- Format strings with context: `"Category %-20s | %d canonical | %d candidates"`
-- Parameterized logging: `log.info("  source=%-10s  count=%d", record["source"], record["cnt"])`
-- No structured logging (JSON); plain text only
-
-## Comments
-
-**When to Comment:**
-- Module docstrings required for all scripts: describe purpose, input data, output, usage example
-  - Example: `/scripts/load_items.py:1-5` shows Usage pattern with Python -m invocation
-  - Example: `/scripts/search.py:1-15` includes programmatic usage example
-- Section comments to organize code: `# ---------------------------------------------------------------------------` dividers separate logical sections
-- No inline comments for obvious code
-- Complex logic documented with docstrings
-
-**JSDoc/TSDoc:**
-- Functions use docstrings (Python style, not TypeScript):
-  - One-line for simple: `"""Return a singleton Neo4j driver."""`
-  - Multi-line for complex: Shows parameter behavior in `/scripts/load_items.py:78-85` (parse_meal_types)
-  - Return type documented: `"""...: Returns list of {community_id, name, score, members, variant_names}."""` in `/scripts/search.py:76-80`
+Every module:
+```python
+import logging
+logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+log = logging.getLogger(__name__)
+```
+- **Level:** `INFO` default everywhere
+- **No timestamps** in format string (assumes aggregator adds them)
+- **What to log:** input counts, step boundaries, result counts, error context
+- **`log.info("Embedding %d items: %s", len(items), items)`** — uses `%`-style, not f-strings
 
 ## Function Design
 
-**Size:**
-- Small utility functions: 5-10 lines (e.g., `normalize_category()`, `_safe_float()`)
-- Moderate functions: 20-40 lines (e.g., `load_dynamodb_items()`, `parse_platter()`)
-- Larger functions: 50-80 lines when handling complex orchestration (e.g., `search_platters()`, `main()` entrypoints)
-- No function exceeds 100 lines
+- **Flat over nested:** flat modular functions preferred; self-nesting (function-inside-function) only for intentional closure/encapsulation
+- **Narrow responsibility:** one function = one step of the pipeline
+- **Dataclasses** (`@dataclass`) for structured results with many fields (see `PlatterResult`, 30+ fields)
+- **Default factories** (`field(default_factory=list)`, `field(default_factory=dict)`) for mutable defaults
 
-**Parameters:**
-- Functions take specific parameters, not \*args or \*\*kwargs
-- Session objects passed as first parameter to functions operating on Neo4j: `def fetch_dynamodb_items(session)`, `def write_communities_to_neo4j(session, ...)`
-- Query parameters named explicitly: `community_ids`, `community_name_map`, `query_vector`
-- LLM clients passed when needed: `def call_llm_for_variants(client: OpenAI, ...)`
-- Dataclass arguments used for complex returns: `PlatterResult` in `/scripts/search.py:42-56`
+## Neo4j Query Conventions
 
-**Return Values:**
-- Functions return specific types, not tuples without naming: `-> list[PlatterResult]`, `-> dict[str, str]`
-- None used for void operations: `-> None`
-- Empty containers returned on failure: `return []`, `return {}` (not None)
-- Nullable returns explicitly typed: `-> str | None`, `-> float | None`
+- Cypher strings defined as module-level constants in UPPER_SNAKE_CASE
+- `MERGE` over `CREATE` — all writes idempotent
+- Batched writes with `UNWIND $rows AS row` pattern, 500-row batches
+- Session lifecycle via `with neo4j_session() as session:` context manager
+- Parameters passed as dict, never string-interpolated (except trusted internal identifiers)
 
-## Module Design
+## Configuration Access
 
-**Exports:**
-- Scripts have `main()` function as public entry point
-- Utility functions exported without prefix; no `__all__` used
-- Private module state uses underscore prefix: `_neo4j_driver`, `_qdrant_client` in `/core/connections.py`
-- Constants defined at module level for reuse across functions
+- Env vars loaded once in `core/settings.py`, imported by name elsewhere
+- No runtime re-reading of `.env`
+- Constants mixed into `core/settings.py` (not a separate `constants.py`)
 
-**Barrel Files:**
-- No barrel files (no index re-exports)
-- Direct imports from modules: `from core.connections import ...`, `from scripts.search import search_platters`
-- `/core/__init__.py` and `/scripts/__init__.py` are empty
+## Comment Philosophy
+
+- Minimal comments; code should read self-explanatory
+- Section separators used liberally in large files:
+  ```python
+  # ---------------------------------------------------------------------------
+  # Step 2: Per-item Qdrant top-1 community lookup
+  # ---------------------------------------------------------------------------
+  ```
+- Inline comments only for non-obvious invariants (magic numbers, hidden constraints)
+- No TODOs left in committed code (per CLAUDE.md)
+
+## Magic Numbers
+
+Named constants preferred over inline literals:
+- `TOP_N_RESULTS = 3`
+- `CANDIDATE_POOL_SIZE = 15`
+- `COMMUNITY_WEIGHT = 0.7`, `SKELETON_WEIGHT = 0.3`
+- `SUGGESTION_THRESHOLD = 0.60`
+- `QDRANT_SCORE_THRESHOLD = 0.35`
+
+Some ETL scripts still have inline batch sizes (e.g. `500`, `50`) — see CONCERNS.md.
 
 ---
-
-*Convention analysis: 2026-04-10*
+*Conventions analysis: 2026-04-15*

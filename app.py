@@ -56,32 +56,54 @@ if search_clicked and selected:
 
         for i, r in enumerate(results, 1):
             veg_label = "🟢 VEG" if r.veg else "🔴 NON-VEG"
-            coverage_label = f"{r.matched_communities}/{r.query_community_count} dishes matched"
+            coverage_label = (
+                f"{r.matched_communities}/{r.query_community_count} dishes matched"
+                f" · {r.skeleton_coverage_score:.0%} menu fit"
+            )
 
             with st.expander(
                 f"#{i}  **{r.name}**  —  {coverage_label}  |  {veg_label}",
                 expanded=(i == 1),
             ):
                 # Metrics row
-                col1, col2, col3 = st.columns(3)
+                col1, col2, col3, col4 = st.columns(4)
                 col1.metric("Dishes matched", f"{r.matched_communities} / {r.query_community_count}")
                 col2.metric("Coverage", f"{r.coverage_ratio:.0%}")
+                col3.metric("Menu fit", f"{r.skeleton_coverage_score:.0%}")
 
                 if r.min_price and r.max_price:
-                    col3.metric("Price range", f"₹{int(r.min_price)} – ₹{int(r.max_price)}")
+                    col4.metric("Price range", f"₹{int(r.min_price)} – ₹{int(r.max_price)}")
                 else:
-                    col3.metric("Type", r.platter_type)
+                    col4.metric("Type", r.platter_type)
 
                 st.progress(r.coverage_ratio)
+
+                st.markdown("**Menu fit:**")
+                query_categories = ", ".join(
+                    f"{name}×{count}" for name, count in r.query_category_counts.items()
+                ) or "No query skeleton available"
+                platter_categories = ", ".join(
+                    f"{name}×{count}" for name, count in r.platter_category_counts.items()
+                ) or "No platter skeleton available"
+                raw_categories = ", ".join(r.platter_category_labels) or "No raw platter categories available"
+                matched_categories = ", ".join(r.matched_query_categories) or "None"
+                missing_categories = ", ".join(r.missing_query_categories) or "None"
+                st.caption(f"Query family skeleton: {query_categories}")
+                st.caption(f"Platter family skeleton: {platter_categories}")
+                st.caption(f"Platter raw categories: {raw_categories}")
+                st.caption(f"Matched families: {matched_categories}")
+                st.caption(f"Missing families: {missing_categories}")
 
                 # Per-item match status
                 st.markdown("**Your dishes:**")
                 for item, comm_name in r.item_to_community.items():
                     cid = r.item_to_community_id.get(item)
                     summary = r.community_summaries.get(cid) if cid else None
+                    category_name = r.item_to_category.get(item)
+                    category_suffix = f" [{category_name}]" if category_name else ""
 
                     if comm_name and comm_name in r.matched_community_names:
-                        st.write(f"✅ **{item}** → matched as *{comm_name}*")
+                        st.write(f"✅ **{item}**{category_suffix} → matched as *{comm_name}*")
                         if summary:
                             narrative = summary.get("narrative")
                             if narrative:
@@ -89,14 +111,14 @@ if search_clicked and selected:
                             variants = summary.get("variant_names", [])
                             if variants:
                                 st.markdown(f"<small>Also known as: {', '.join(variants)}</small>", unsafe_allow_html=True)
-                    elif comm_name:
+                    else:
                         suggestion = r.suggested_alternatives.get(item)
                         if suggestion:
-                            st.write(f"⚠️ **{item}** → not in this platter · closest: *{suggestion}*")
+                            st.write(
+                                f"⚠️ **{item}**{category_suffix} → not in this platter · closest match: *{suggestion}*"
+                            )
                         else:
-                            st.write(f"⚠️ **{item}** → *{comm_name}* *(not in this platter)*")
-                    else:
-                        st.write(f"❌ **{item}** — not found in any community")
+                            st.write(f"❌ **{item}**{category_suffix} — not in this platter")
 
                 # Full platter item list
                 if r.items:

@@ -4,76 +4,19 @@ Usage:
     python -m scripts.load_items
 """
 
-import ast
 import csv
 import json
 import logging
-import re
 import sys
 from pathlib import Path
 from typing import Any
 
+from core.categories import normalize_category
 from core.connections import close_connections, neo4j_session
 from core.settings import DYNAMODB_CSV, SUPABASE_CSV
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 log = logging.getLogger(__name__)
-
-# ---------------------------------------------------------------------------
-# Category normalisation map
-# ---------------------------------------------------------------------------
-
-CATEGORY_MAP: dict[str, str] = {
-    "Curry": "Curry",
-    "Curries": "Curry",
-    "Gravy": "Curry",
-    "Mains": "Curry",
-    "Dal": "Dal",
-    "Liquid": "Dal",
-    "Liquids": "Dal",
-    "Flavoured Rice/Dal/Liquid/Fry/Chutney": "Rice",
-    "Biryani": "Biryani",
-    "Biryani & Pulav": "Biryani",
-    "Pulao": "Rice",
-    "Flavoured Rice": "Rice",
-    "Special Rice": "Rice",
-    "Fried Rice/Noodles": "Rice",
-    "Bread": "Bread",
-    "Bread/Side": "Bread",
-    "Starter": "Starter",
-    "Starters": "Starter",
-    "Hot/Starter": "Starter",
-    "Cocktail Sides": "Starter",
-    "BBQ Skewers": "Starter",
-    "Snack": "Snack",
-    "Savories": "Snack",
-    "Hot": "Snack",
-    "Pasta": "Pasta",
-    "Fry": "Fry",
-    "Side": "Side",
-    "Sides": "Side",
-    "Side/Desserts": "Side",
-    "Accompaniments": "Accompaniment",
-    "Fresh Chutney & Pickles": "Accompaniment",
-    "Fresh Grinded Chutney": "Accompaniment",
-    "Dessert": "Dessert",
-    "Desserts": "Dessert",
-    "Sweet": "Dessert",
-    "Traditional Sweet": "Dessert",
-    "Fruit": "Fruit",
-    "Fruit/Sweet/Sides": "Fruit",
-    "Salad": "Salad",
-    "Soups": "Soup",
-    "Beverages": "Beverage",
-    "Hot & Cold Beverages": "Beverage",
-    "Welcome Drink": "Beverage",
-}
-
-
-def normalize_category(raw: str) -> str:
-    """Map raw itemCategory to canonical category name."""
-    return CATEGORY_MAP.get(raw.strip(), raw.strip())
-
 
 def parse_meal_types(raw: str) -> list[str]:
     """Parse DynamoDB JSON-wrapped mealType list.

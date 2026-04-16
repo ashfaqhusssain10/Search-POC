@@ -1,215 +1,120 @@
 # Codebase Structure
 
-**Analysis Date:** 2026-04-14
+**Analysis Date:** 2026-04-15
 
 ## Directory Layout
 
 ```
 SearchPOC/
-├── core/                      # Configuration and connection management
-│   ├── __init__.py           # Package marker
-│   ├── settings.py           # Env vars, Qdrant/Neo4j/Gemini config, constants
-│   └── connections.py        # Singleton connection factories
-├── scripts/                   # Executable ETL and query scripts
-│   ├── __init__.py
-│   ├── enrich_items.py       # Step 0: Gemini enrichment — overwrites both CSVs
-│   ├── load_items.py         # Step 1: Load canonical and alias items into Neo4j
-│   ├── load_platters.py      # Step 2: Load platters from DynamoDB
-│   ├── generate_variants.py  # Step 3: Scored LLM variant matching
-│   ├── add_canonical_bridges.py # Step 3b: Qdrant-based canonical↔canonical BRIDGE_TO edges
-│   ├── detect_communities.py # Step 4: Weighted Leiden clustering (VARIANT_OF + BRIDGE_TO)
-│   ├── generate_summaries.py # Step 5: LLM narratives per community
-│   ├── build_community_edges.py # Step 6: Precompute platter coverage
-│   ├── index_communities.py  # Step 7: Embed + Qdrant index
-│   ├── search.py             # Query-time: dish search
-│   └── inspect_dynamo.py     # Utility: DynamoDB inspection
-├── llm_cache/                 # Gitignored — cached raw LLM responses
-│   ├── enrichment/           # Gemini responses from enrich_items.py
-│   ├── variants/             # OpenAI responses from generate_variants.py
-│   └── dry_run_bridges.json  # Dry-run plan written by add_canonical_bridges.py
-├── memory/                    # Long-form notes and semantic decision records
-│   └── feedback_bridge_semantics.md  # Why BRIDGE_TO is loose alternative-similarity
-├── docs/                      # Design documents and specs
-│   └── superpowers/
-│       └── specs/
-│           └── 2026-04-10-variant-matching-redesign.md
-├── .planning/                # GSD planning documents (generated)
-│   └── codebase/            # Architecture/structure analysis
-├── .env.example             # Environment variable template
-├── requirements.txt         # Python dependencies
-├── CLAUDE.md               # Project coding standards
-├── reference.md            # Infrastructure reference (Elphie POC)
-└── *.csv                   # Input data (DynamoDB and Supabase exports; mutated by enrich_items.py)
+├── app.py                          # Streamlit UI entry point
+├── core/                           # Shared utilities
+│   ├── connections.py              # Neo4j + Qdrant singleton clients
+│   ├── settings.py                 # Environment variable loading + constants
+│   └── categories.py               # Category normalization / family mapping
+├── scripts/                        # ETL + query pipeline (~19 scripts)
+│   ├── enrich_items.py             # Step 0: LLM item enrichment
+│   ├── load_items.py               # Step 1: DynamoDB + Supabase → Neo4j
+│   ├── generate_variants.py        # Step 3: VARIANT_OF edges (Gemini)
+│   ├── add_canonical_bridges.py    # Step 3b: BRIDGE_TO edges (vector geometry)
+│   ├── load_platters.py            # Step 4: DynamoDB platters → Neo4j
+│   ├── detect_communities.py       # Step 5: Leiden clustering
+│   ├── build_community_edges.py    # Step 6: HAS_COMMUNITY pre-computation
+│   ├── generate_summaries.py       # Step 7: Per-community narratives
+│   ├── index_communities.py        # Step 8: Embed + Qdrant upsert
+│   ├── search.py                   # Query-time: embed → Qdrant → Neo4j ranking
+│   ├── embed_items.py              # Item-level embeddings (utility)
+│   ├── mine_also_known_as.py       # Alias mining utility
+│   ├── eval.py                     # Evaluation harness
+│   ├── inspect_dynamo.py           # DynamoDB table inspector
+│   ├── verify_bridges.py           # Bridge edge sanity check
+│   ├── cleanup_communities.py      # Community cleanup utility
+│   ├── diag_linkage.py             # Linkage diagnostics
+│   └── diag_alternatives.py        # Alternatives diagnostics
+├── llm_cache/                      # On-disk LLM response caching
+│   ├── enrichment/                 # enrich_items.py results
+│   └── variants/                   # generate_variants.py per-canonical cache
+├── .planning/                      # Project planning + analysis
+│   ├── codebase/                   # This directory: codebase map docs
+│   ├── debug/                      # Debug notes
+│   └── search_eval/                # Evaluation queries
+├── docs/                           # Architecture specs
+│   └── superpowers/specs/          # System design docs
+├── .env                            # Secrets (git-ignored)
+└── requirements.txt                # Python dependencies
 ```
 
 ## Directory Purposes
 
-**core/**
-- Purpose: Centralized configuration and connection lifecycle management
-- Contains: Environment loading via `python-dotenv`, singleton Neo4j driver, singleton Qdrant client
-- Key files: `settings.py` (all configurable constants including `GEMINI_API_KEY`), `connections.py` (connection factories + context managers)
+**`app.py`** — Streamlit UI: multi-select dish picker, result rendering, metric cards. 132 lines.
 
-**scripts/**
-- Purpose: Executable Python modules for ETL pipeline and query-time search
-- Contains: 9 ETL steps (Step 0 through Step 7, plus Step 3b) + 1 query entry point + 1 utility
-- Key files: All `*.py` files are runnable as `python -m scripts.<name>`
-- Pipeline order: `enrich_items` → `load_items` → `load_platters` → `generate_variants` → `add_canonical_bridges` → `detect_communities` → `generate_summaries` → `build_community_edges` → `index_communities`
+**`core/`** — Shared infrastructure:
+- `connections.py`: Neo4j driver singleton, Qdrant client singleton, context managers
+- `settings.py`: `.env` loading; constants (`QDRANT_SCORE_THRESHOLD=0.35`, `EMBEDDING_MODEL=text-embedding-3-small`, `EMBEDDING_DIM=1536`, `QDRANT_COLLECTION=item_search_communities`)
+- `categories.py`: 92-raw → 15-family `CATEGORY_FAMILY_MAP`; helpers `category_family()`, `normalize_category()`
 
-**llm_cache/**
-- Purpose: Persist raw LLM API responses for debugging and idempotent re-runs, plus dry-run artifacts
-- Generated: Yes — created automatically by `enrich_items.py`, `generate_variants.py`, and `add_canonical_bridges.py`
-- Committed: No (gitignored)
-- Sub-directories:
-  - `llm_cache/enrichment/`: One JSON file per batch from `enrich_items.py` (named `dynamodb_<offset>.json`, `supabase_<offset>.json`)
-  - `llm_cache/variants/`: One JSON file per category batch from `generate_variants.py` (named `<Category>_<offset>.json`)
-  - `llm_cache/dry_run_bridges.json`: Last dry-run plan from `add_canonical_bridges.py` (canonical → top-K neighbor list with cosine scores); inspected before running with `--commit`
+**`scripts/`** — ETL pipeline and query-time logic. All scripts runnable via `python -m scripts.<name>`. All call `close_connections()` in `finally`.
 
-**memory/**
-- Purpose: Long-form decision notes that survive across sessions and inform agent behavior
-- Key files: `feedback_bridge_semantics.md` — defines BRIDGE_TO as alternative-similarity (cross-ingredient bridges within `veg_type+form` are acceptable; do NOT add ingredient-overlap filters)
+**`llm_cache/`** — Persistent LLM response cache, git-ignored. Invalidated by manual delete or prompt version bump.
 
-**docs/superpowers/specs/**
-- Purpose: Design specs and architectural decision records
-- Contains: Markdown specs for significant feature changes
-- Key files: `2026-04-10-variant-matching-redesign.md` — full spec for the enrich→load→variants pipeline redesign
+**`.planning/`** — GSD planning structure:
+- `codebase/`: dynamic codebase analysis docs (this file lives here)
+- `debug/`: ephemeral debug notes
+- `search_eval/`: evaluation query sets
 
-**.planning/codebase/**
-- Purpose: GSD mapping documents (generated by `/gsd:map-codebase`)
-- Contains: ARCHITECTURE.md, STRUCTURE.md (this file), and when focus is `tech` or `quality`: STACK.md, INTEGRATIONS.md, CONVENTIONS.md, TESTING.md
-
-**Root level:**
-- `requirements.txt`: Python dependencies (neo4j, qdrant-client, openai, google-genai, pandas, graspologic, networkx, boto3, python-dotenv)
-- `.env.example`: Template showing all required/optional environment variables
-- `CLAUDE.md`: Code quality standards and communication protocols for future Claude instances
-- `reference.md`: Complete reference to Elphie infrastructure (Neo4j, Qdrant, AWS setup, schemas)
+**`docs/superpowers/specs/`** — System design documents (e.g. `2026-04-10-variant-matching-redesign.md`).
 
 ## Key File Locations
 
-**Entry Points:**
-- `scripts/enrich_items.py`: `main()` — Gemini enrichment; enriches both CSVs with `llm_description` column
-- `scripts/load_items.py`: `main()` at line 286 — loads Item nodes from enriched CSV
-- `scripts/load_platters.py`: `main()` at line 86 — loads Platter nodes from DynamoDB
-- `scripts/generate_variants.py`: `main()` — scored LLM variant matching
-- `scripts/add_canonical_bridges.py`: `main()` — Qdrant-driven BRIDGE_TO edges; supports `--commit` flag (dry-run by default)
-- `scripts/detect_communities.py`: `main()` — weighted Leiden clustering on VARIANT_OF (1.0) + BRIDGE_TO (0.5)
-- `scripts/generate_summaries.py`: `main()` — Per-community LLM narrative
-- `scripts/build_community_edges.py`: `main()` at line 36 — Precompute coverage edges
-- `scripts/index_communities.py`: `main()` — Embed communities to Qdrant
-- `scripts/search.py`: `main()` at line 224 (CLI) or `search_platters(query)` at line 171 (API)
+**Entry Points**
+- [app.py](app.py) — Streamlit UI
+- [scripts/search.py](scripts/search.py) — CLI search
+- Any `scripts/*.py` — standalone ETL step
 
-**Configuration:**
-- `core/settings.py`: All environment variables and defaults
-  - Neo4j: `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD`
-  - Qdrant: `QDRANT_HOST`, `QDRANT_PORT`, `QDRANT_API_KEY`, `QDRANT_COLLECTION`, `QDRANT_SCORE_THRESHOLD`
-  - OpenAI: `OPENAI_API_KEY`, `EMBEDDING_MODEL`, `EMBEDDING_DIM`
-  - Gemini: `GEMINI_API_KEY`
-  - CSV paths: `DYNAMODB_CSV`, `SUPABASE_CSV`
-- `.env.example`: Template with comments; copy to `.env` and fill in secrets
+**Configuration**
+- `.env` — secrets (git-ignored)
+- [core/settings.py](core/settings.py) — env var loading + constants
+- [requirements.txt](requirements.txt) — deps: neo4j, qdrant-client, openai, graspologic, networkx, boto3, python-dotenv, google-genai, pandas, rapidfuzz, streamlit
 
-**Core Logic:**
-- `scripts/search.py` (lines 76-98): `find_communities()` — Qdrant cosine search
-- `scripts/search.py` (lines 129-164): `rank_platters()` — Neo4j platter ranking query
-- `scripts/detect_communities.py` (lines 50-108): Weighted Leiden clustering, isolated node handling, max-merge of VARIANT_OF and BRIDGE_TO weights
-- `scripts/add_canonical_bridges.py`: Per-canonical Qdrant query against `searchpoc_canonicals` with `veg_type+form` payload filter, TOP_K=3, threshold 0.80, score-gap 0.05, bidirectional MERGE
-- `scripts/generate_variants.py` (lines 61-100+): Scored LLM batch matching by category
-- `scripts/enrich_items.py` (lines 74-125): `enrich_batch()` — Gemini batch call with caching
+**Core Logic**
+- [scripts/search.py](scripts/search.py) — `rank_platters()` Cypher, `compute_skeleton_metrics()`, coverage scoring (600 lines — largest hot path)
+- [scripts/generate_variants.py](scripts/generate_variants.py) — 678 lines, largest ETL module
+- [scripts/detect_communities.py](scripts/detect_communities.py) — Leiden via `graspologic.partition.hierarchical_leiden`
+- [core/categories.py](core/categories.py) — category family normalization
 
-**Testing:**
-- No dedicated test directory; all scripts have inline verification (logging counts, sample queries)
-- E.g., `scripts/load_items.py` line 274: `verify()` function checks item counts by source
-- E.g., `scripts/detect_communities.py` line 169: Verification query logs top 10 communities
+**Evaluation / Diagnostics**
+- [scripts/eval.py](scripts/eval.py) — evaluation harness (199 lines)
+- [.planning/search_eval/](.planning/search_eval/) — test query sets
+- `scripts/diag_*.py`, `scripts/verify_bridges.py` — debug utilities
 
 ## Naming Conventions
 
-**Files:**
-- Python modules: `snake_case.py` (e.g., `enrich_items.py`, `load_items.py`, `detect_communities.py`)
-- All scripts runnable as: `python -m scripts.<name>` (no `__main__.py` — uses module execution)
-- Spec docs: `YYYY-MM-DD-<slug>.md` (e.g., `2026-04-10-variant-matching-redesign.md`)
-
-**Functions:**
-- Private helpers: `_snake_case()` prefix (e.g., `_safe_float()`, `_count_rows()`)
-- Public functions: `snake_case()` (e.g., `search_platters()`, `embed_query()`, `find_communities()`)
-- Main entrypoint: Always `main() → None`
-
-**Variables & Constants:**
-- Constants: `SCREAMING_SNAKE_CASE` (e.g., `BATCH_SIZE`, `MAX_RETRIES`, `QDRANT_COLLECTION`, `EMBEDDING_MODEL`, `MODEL`)
-- Type hints: Required on all function signatures (e.g., `def search_platters(query: str) -> list[PlatterResult]`)
-- Dataclasses: `PascalCase` (e.g., `PlatterResult` in `scripts/search.py` line 43)
-
-**Neo4j Node Labels:**
-- `Item` — canonical or alias dish; includes `llm_description` property (JSON string)
-- `Platter` — catering menu
-- `Community` — cluster of related items
-- Properties: `snake_case` (e.g., `item_type`, `min_price`, `summary_json`, `llm_description`)
-
-**Neo4j Edge Types:**
-- `VARIANT_OF` — canonical → alias, LLM-grounded (Leiden weight 1.0)
-- `BRIDGE_TO` — canonical ↔ canonical (DynamoDB only), Qdrant-grounded loose similarity (Leiden weight 0.5); has `score` property
-- `CONTAINS` — Platter → Item
-- `MEMBER_OF` — Item → Community
-- `HAS_COMMUNITY` — Platter → Community (precomputed)
+**Files / modules:** `snake_case.py`
+**Functions:** `fetch_*`, `scan_*`, `build_*`, `compute_*`, private `_helper()`
+**Cypher query strings:** module-level `SCREAMING_SNAKE_CASE` constants (e.g. `FETCH_VARIANT_OF_EDGES`, `RANK_PLATTERS_QUERY`)
+**Config constants:** `SCREAMING_SNAKE_CASE` (`QDRANT_SCORE_THRESHOLD`, `EMBEDDING_MODEL`, `MAX_CLUSTER_SIZE`)
+**Data classes:** `PascalCase` (e.g. `PlatterResult`)
+**No custom exception classes** — uses built-ins only
 
 ## Where to Add New Code
 
-**New Batch Processing Step (ETL):**
-- Create: `scripts/new_step.py`
-- Follow pattern: Core function + `main()` with `neo4j_session()` context manager
-- Use singleton: `get_qdrant_client()` or `get_neo4j_driver()` from `core.connections`
-- Add runnable docstring at top: `"""Step N: <description>. Usage: python -m scripts.new_step"""`
-- Log progress: Use `logging.getLogger(__name__)` initialized at module level
+**New ETL step** — create `scripts/new_step.py`, import from `core.*`, define module-level Cypher constants, provide `main()`, call `close_connections()` in `finally`.
 
-**New LLM Enrichment Step:**
-- Create: `scripts/enrich_*.py`
-- Follow pattern from `scripts/enrich_items.py`: batch calls, per-batch cache writes to `llm_cache/<name>/`, idempotent (skip already-enriched rows)
-- Cache dir constant: `CACHE_DIR = Path("llm_cache/<name>")` with `CACHE_DIR.mkdir(parents=True, exist_ok=True)` before write
+**New query feature** — modify `scripts/search.py`; update `PlatterResult` dataclass if new fields; update `app.py` rendering.
 
-**New Graph-Mutating Script:**
-- Follow pattern from `scripts/add_canonical_bridges.py`: dry-run by default, `--commit` flag to mutate, write dry-run plan to `llm_cache/dry_run_<name>.json`, full-replace idempotency (delete existing edges of the type before writing)
+**New diagnostic** — create `scripts/diag_<name>.py` or `verify_<name>.py`. No pipeline integration required.
 
-**New Query Operation:**
-- Create: Function in `scripts/search.py` or separate `scripts/query_*.py` file
-- Follow pattern: Load via `neo4j_session()`, query with typed parameters, return structured result
-- Use `PlatterResult` dataclass for consistency
-- Keep LLM calls out of query path (zero-LLM-at-query-time principle)
+**New category mapping** — edit `CATEGORY_FAMILY_MAP` in `core/categories.py`.
 
-**New Utility Function:**
-- Create: `scripts/util_*.py` or add to `core/connections.py`
-- Use: Proper error handling, type hints, docstrings
-- Test: Add inline verification or pytest in future
-
-**New Design Spec:**
-- Create: `docs/superpowers/specs/YYYY-MM-DD-<slug>.md`
+**Shared utility** — if cross-script, add to `core/` (new module or extend existing).
 
 ## Special Directories
 
-**CSV Input Data:**
-- Location: Project root (alongside `requirements.txt`)
-- Generated: No; manually exported from DynamoDB and Supabase — then mutated in place by `scripts/enrich_items.py` (adds `llm_description` column)
-- Committed: No (large files, typically in `.gitignore`)
-- Files:
-  - `Search -POC data - Active DynamoDB Master Data.csv` — Canonical items
-  - `Search -POC data - Supabase Master Data.csv` — Alias items
-- Used by: `scripts/enrich_items.py` (read + overwrite), `scripts/load_items.py` (read only)
-
-**llm_cache/ (gitignored):**
-- Location: `llm_cache/enrichment/`, `llm_cache/variants/`
-- Generated: Yes — auto-created by `enrich_items.py` and `generate_variants.py`
-- Committed: No (gitignored)
-- Use: Inspect to debug LLM output quality; scripts skip already-enriched rows on re-runs
-
-**AWS / DynamoDB Access:**
-- Purpose: Load platter structure from live DynamoDB (optional, requires AWS credentials)
-- Used by: `scripts/load_platters.py` (lines 39-54)
-- Default tables: `craftmyplate-platters`, `craftmyplate-variations` (env: `PLATTERS_TABLE`, `VARIATIONS_TABLE`)
-- Fallback: Can use CSV exports if DynamoDB unavailable
-
-**.env File:**
-- Purpose: Local development secrets and configuration
-- Generated: No; user copies `.env.example` to `.env` and fills in values
-- Committed: No (ignored by `.gitignore`)
-- Loaded by: `core/settings.py` line 8 via `load_dotenv()`
-- Examples: `NEO4J_PASSWORD=password`, `OPENAI_API_KEY=sk-...`, `QDRANT_HOST=localhost`, `GEMINI_API_KEY=...`
+| Directory | Generated | Committed | Purpose |
+|---|---|---|---|
+| `llm_cache/` | Yes (scripts) | No | LLM response cache |
+| `.planning/codebase/` | Yes (gsd) | Yes | Codebase map |
+| `.planning/debug/` | Manual | Yes | Debug notes |
+| `docs/superpowers/specs/` | Manual | Yes | Design docs |
 
 ---
-
-*Structure analysis: 2026-04-14*
+*Structure analysis: 2026-04-15*
