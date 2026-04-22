@@ -14,10 +14,10 @@ st.set_page_config(page_title="Platter Search", page_icon="🍽️", layout="cen
 
 @st.cache_data(show_spinner="Loading dish list...")
 def load_canonical_items() -> list[str]:
-    """Fetch all DynamoDB canonical item names from Neo4j, sorted."""
+    """Fetch all Supabase canonical item names from Neo4j, sorted."""
     with neo4j_session() as session:
         result = session.run(
-            "MATCH (i:Item {source: 'dynamodb'}) RETURN i.name AS name ORDER BY i.name"
+            "MATCH (i:Item {source: 'supabase'}) RETURN i.name AS name ORDER BY i.name"
         )
         return [r["name"] for r in result]
 

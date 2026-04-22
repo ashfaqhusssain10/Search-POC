@@ -16,7 +16,6 @@ Usage (programmatic):
 
 import json
 import logging
-import sys
 from collections import Counter
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
@@ -25,7 +24,7 @@ from typing import Any
 from openai import OpenAI
 from qdrant_client.models import FieldCondition, Filter, MatchAny
 
-from core.categories import build_category_family_counts, category_family
+from core.categories import build_category_family_counts, category_family, typecode_family
 from core.connections import close_connections, get_qdrant_client, neo4j_session
 from core.settings import (
     EMBEDDING_MODEL,
@@ -247,6 +246,20 @@ def fallback_same_family_candidate(
 # ---------------------------------------------------------------------------
 # Step 3: Neo4j platter ranking
 # ---------------------------------------------------------------------------
+
+FETCH_SUPABASE_TYPECODES_QUERY = """
+MATCH (i:Item {source: 'supabase'})
+WHERE i.name IN $names
+RETURN i.name AS name, i.typecode_name AS typecode
+"""
+
+
+RESOLVE_CANONICAL_QUERY = """
+MATCH (canonical:Item {source: 'dynamodb'})-[:VARIANT_OF]->(alias:Item {source: 'supabase', name: $name})
+RETURN canonical.name AS canonical_name
+LIMIT 1
+"""
+
 
 FIND_VARIANT_SUBSTITUTE = """
 MATCH (q:Item {source: 'dynamodb'})
@@ -473,6 +486,24 @@ def sort_platters_by_final_score(platters: list[PlatterResult]) -> list[PlatterR
 # Public API
 # ---------------------------------------------------------------------------
 
+def resolve_canonical_names(session, items: list[str]) -> dict[str, str]:
+    """Resolve Supabase alias names to their DynamoDB canonical via VARIANT_OF.
+
+    Returns a mapping of original item name → canonical name to embed.
+    Items with no alias match are returned unchanged (they may already be canonical).
+    """
+    resolved: dict[str, str] = {}
+    for item in items:
+        row = session.run(RESOLVE_CANONICAL_QUERY, name=item).single()
+        if row:
+            canonical = row["canonical_name"]
+            resolved[item] = canonical
+            log.info("  %r → resolved canonical %r", item, canonical)
+        else:
+            resolved[item] = item
+    return resolved
+
+
 def search_platters(query: str) -> list[PlatterResult]:
     """Main entry point. Returns ranked PlatterResult list for a comma-separated dish query."""
     items = [i.strip() for i in query.split(",") if i.strip()]
@@ -482,8 +513,13 @@ def search_platters(query: str) -> list[PlatterResult]:
     openai_client = OpenAI(api_key=OPENAI_API_KEY)
     qdrant = get_qdrant_client()
 
-    # Single batch embed call for all items
-    vectors = embed_items(openai_client, items)
+    # Resolve Supabase alias names → DynamoDB canonicals before embedding
+    with neo4j_session() as session:
+        item_to_canonical = resolve_canonical_names(session, items)
+
+    # Embed canonical names (better community alignment) but key results by original names
+    canonical_items = [item_to_canonical[item] for item in items]
+    vectors = embed_items(openai_client, canonical_items)
 
     # Global top-1 lookup per dish — determines community assignment and coverage
     seed_community_ids: list[str] = []
@@ -491,6 +527,7 @@ def search_platters(query: str) -> list[PlatterResult]:
     item_community_name_map: dict[str, str] = {}  # community_id → community name
 
     for item, vector in zip(items, vectors):
+        canonical = item_to_canonical[item]
         comm = find_best_community(qdrant, vector)
         if comm:
             cid = comm["community_id"]
@@ -498,18 +535,35 @@ def search_platters(query: str) -> list[PlatterResult]:
                 seed_community_ids.append(cid)
             seed_item_to_community_id[item] = cid
             item_community_name_map[cid] = comm["name"]
-            log.info("  %r → community %r (score %.3f)", item, comm["name"], comm["score"])
+            log.info("  %r (canonical: %r) → community %r (score %.3f)", item, canonical, comm["name"], comm["score"])
         else:
             seed_item_to_community_id[item] = None
-            log.info("  %r → no community found above threshold", item)
+            log.info("  %r (canonical: %r) → no community found above threshold", item, canonical)
 
     with neo4j_session() as session:
-        community_to_category = fetch_community_categories(session, seed_community_ids)
-        item_to_category = build_item_category_map(
-            items,
-            seed_item_to_community_id,
-            community_to_category,
-        )
+        # Prefer Supabase typecode_name for category (richer, more accurate than DynamoDB itemCategory).
+        # Fall back to community-derived category for items with no Supabase typecode.
+        typecode_rows = session.run(FETCH_SUPABASE_TYPECODES_QUERY, names=items)
+        item_to_typecode: dict[str, str | None] = {r["name"]: r["typecode"] for r in typecode_rows}
+
+        item_to_category: dict[str, str | None] = {}
+        for item in items:
+            family = typecode_family(item_to_typecode.get(item))
+            if family:
+                item_to_category[item] = family
+                log.info("  %r category from typecode %r → %r", item, item_to_typecode.get(item), family)
+            else:
+                item_to_category[item] = None  # filled in by community fallback below
+
+        # Fallback: community-derived category for items without a Supabase typecode
+        missing = [item for item, cat in item_to_category.items() if cat is None]
+        if missing:
+            missing_cids = [seed_item_to_community_id[m] for m in missing if seed_item_to_community_id.get(m)]
+            community_to_category = fetch_community_categories(session, missing_cids)
+            for item in missing:
+                cid = seed_item_to_community_id.get(item)
+                item_to_category[item] = community_to_category.get(cid or "") or None
+
         query_category_counts = build_category_family_counts(list(item_to_category.values()))
         candidates = fetch_all_platters(
             session,
