@@ -34,6 +34,8 @@ from core.settings import EMBEDDING_MODEL, OPENAI_API_KEY
   - `fetch_*`, `scan_*`, `query_*` — I/O bound reads
   - `build_*`, `compute_*` — pure transformation
   - `load_*`, `index_*`, `generate_*` — pipeline steps (write to sinks)
+  - `is_*` — boolean predicates (e.g. `is_known_category` in `core/categories.py`)
+  - `find_*` — threshold-gated lookups returning `None` on miss (e.g. `find_best_community`, `find_closest_in_platter`)
   - `_helper()` — private/internal
 - **Constants:** `SCREAMING_SNAKE_CASE`, module-level
 - **Cypher queries:** module-level `SCREAMING_SNAKE_CASE` string constants (e.g. `RANK_PLATTERS_QUERY`, `FETCH_VARIANT_OF_EDGES`)
@@ -64,7 +66,7 @@ finally:
 
 ## Error Handling
 
-- **Fail-fast:** no broad `except Exception` — exceptions propagate and halt the pipeline
+- **Fail-fast:** no broad `except Exception` — exceptions propagate and halt the pipeline (note: `scripts/eval.py` catches `Exception` intentionally — captured in result dict, not silently swallowed)
 - **LLM API retries:** exponential backoff (`MAX_RETRIES=3`, `RETRY_DELAY=2.0`), each retry logged with context
 - **Optional results:** functions like `find_best_community()` return `None` below threshold rather than raising
 - **Missing env vars:** `os.environ["KEY"]` (not `.get()`) — fails loudly at import if any required key is missing
@@ -107,6 +109,7 @@ log = logging.getLogger(__name__)
 ## Comment Philosophy
 
 - Minimal comments; code should read self-explanatory
+- Commented-out alternative implementations are preserved with rationale when the tradeoff is non-obvious (e.g. broad vector fallback at `scripts/search.py:568–575`)
 - Section separators used liberally in large files:
   ```python
   # ---------------------------------------------------------------------------

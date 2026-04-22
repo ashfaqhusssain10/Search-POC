@@ -27,7 +27,7 @@ Run: `python -m scripts.<name>` and read the log output.
 ### 3. Evaluation harness
 [scripts/eval.py](scripts/eval.py) (199 lines) runs search queries against a fixed evaluation set in [.planning/search_eval/](.planning/search_eval/) and reports result quality. This is the closest thing to a regression test — used manually after changes to ranking logic, embeddings, or community detection.
 
-Evaluation inputs live in `.planning/search_eval/eval_queries.md`.
+Evaluation inputs live in `.planning/search_eval/eval_queries.md`. Uses 20 frozen queries with `--json`, `--diff`, and `--detail` flags for regression diffing between runs.
 
 ### 4. LLM response cache
 `llm_cache/variants/` and `llm_cache/enrichment/` serve as a quasi-snapshot: changing a prompt invalidates the cache (via prompt version bump) and forces fresh LLM calls, which makes regressions visible.

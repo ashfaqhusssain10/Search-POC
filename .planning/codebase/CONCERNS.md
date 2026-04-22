@@ -114,4 +114,56 @@
 - `coverage_ratio` denominator is `query_community_count` (unique communities) not `len(items)` — two synonymous items count as one in the denominator
 
 ---
-*Concerns analysis: 2026-04-15*
+## Additional Concerns (2026-04-22 refresh)
+
+### 🟡 `CANDIDATE_POOL_SIZE` dead constant
+- Defined at `scripts/search.py:41` as `15`, never referenced anywhere in the file
+- **Where:** [scripts/search.py:41](scripts/search.py#L41)
+
+### 🟡 Non-thread-safe singletons
+- `core/connections.py` globals `_neo4j_driver` / `_qdrant_client` have race conditions under concurrent Streamlit requests
+- No lock around the `if _neo4j_driver is None` check
+- **Where:** [core/connections.py](core/connections.py)
+
+### 🟡 `OpenAI` client recreated per query
+- `scripts/search.py:482` instantiates `OpenAI(api_key=...)` inside `search_platters()` on every call
+- Should be a module-level or cached singleton
+- **Where:** [scripts/search.py:482](scripts/search.py#L482)
+
+### 🟡 `logging.basicConfig` in every script
+- First-call wins semantics — when scripts import each other, only the first `basicConfig` call takes effect
+- `eval.py` already works around this; other scripts may silently lose config
+- **Where:** every script under `scripts/`
+
+### 🟡 Bare `except:` in generate_variants.py
+- `scripts/generate_variants.py:335` catches bare `except:`, which includes `SystemExit` and `KeyboardInterrupt`
+- **Where:** [scripts/generate_variants.py:335](scripts/generate_variants.py#L335)
+
+### 🟡 Full platter scan on every query — no Cypher filtering
+- `FETCH_ALL_PLATTERS_QUERY` returns all 192+ platters; community-intersection filtering is done in Python
+- For POC scale this is fine; will not scale to large platter catalogs
+- **Where:** [scripts/search.py](scripts/search.py)
+
+### 🟡 N×M serial Qdrant calls in suggestion pass
+- Suggestion pass runs up to 3 platters × N missing items = 3N serial Qdrant round-trips
+- These are already sequential (not batched); no parallelism
+- **Where:** [scripts/search.py:529–578](scripts/search.py#L529-L578)
+
+### 🟡 Silently drops corrupted community summaries
+- `scripts/search.py:337–342` catches `json.JSONDecodeError` with no log line
+- A corrupt `summary_json` silently disappears from the UI
+- **Where:** [scripts/search.py:337](scripts/search.py#L337)
+
+### 🟢 `@st.cache_data` with no TTL (duplicate, see Performance above)
+- Also note: `load_canonical_items()` caches the Supabase item list indefinitely; stale after `load_items.py` reruns
+
+### 🟢 No input validation on `search_platters()`
+- No max item count or max string length guard on the query input
+- **Where:** [scripts/search.py:476](scripts/search.py#L476)
+
+### 🟢 `graspologic` dependency risk
+- Heavyweight academic library used only for `hierarchical_leiden` in `scripts/detect_communities.py`
+- Unpredictable release cadence; only one function used from it
+
+---
+*Concerns analysis refreshed: 2026-04-22*
