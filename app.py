@@ -1,5 +1,7 @@
 """Streamlit UI for Item-Based Platter Search POC."""
 
+import os
+
 import streamlit as st
 
 from core.connections import neo4j_session
@@ -9,8 +11,8 @@ st.set_page_config(page_title="Platter Search", page_icon="🍽️", layout="cen
 
 
 def _check_password() -> bool:
-    """Gate the app behind a shared password stored in Streamlit secrets."""
-    expected = st.secrets.get("app_password")
+    """Gate the app behind a shared password stored in env var APP_PASSWORD."""
+    expected = os.getenv("APP_PASSWORD")
     if not expected:
         return True  # Local dev — no password configured
 
