@@ -22,7 +22,7 @@ from difflib import SequenceMatcher
 from typing import Any
 
 from openai import OpenAI
-from qdrant_client.models import FieldCondition, Filter, MatchAny
+from qdrant_client.models import FieldCondition, Filter, MatchAny, MatchValue
 
 from core.categories import build_category_family_counts, category_family, typecode_family
 from core.connections import close_connections, get_qdrant_client, neo4j_session
@@ -79,6 +79,7 @@ class PlatterResult:
     suggested_alternatives: dict[str, str | None] = field(default_factory=dict)  # item → closest item name
     family_item_candidates: dict[str, list[dict[str, str | None]]] = field(default_factory=dict)
     community_summaries: dict[str, dict[str, Any]] = field(default_factory=dict)  # community_id → metadata
+    community_item_types: dict[str, set[str]] = field(default_factory=dict)  # community_id → itemTypes in this platter
 
 
 # ---------------------------------------------------------------------------
@@ -96,25 +97,81 @@ def embed_items(client: OpenAI, items: list[str]) -> list[list[float]]:
 # Step 2: Per-item Qdrant top-1 community lookup
 # ---------------------------------------------------------------------------
 
-def find_best_community(qdrant, vector: list[float]) -> dict[str, Any] | None:
-    """Return the single best community match for one item vector, or None if below threshold."""
+
+FETCH_COMMUNITY_TOP_TYPECODES = """
+MATCH (i:Item {source: 'supabase'})-[:MEMBER_OF]->(c:Community)
+WHERE c.id IN $community_ids AND i.typecode_name IS NOT NULL
+WITH c.id AS cid, i.typecode_name AS tc, count(*) AS freq
+ORDER BY cid, freq DESC, tc ASC
+WITH cid, collect(tc) AS typecodes
+RETURN cid, typecodes
+"""
+
+
+def _build_item_type_filter(item_type: str | None) -> Filter | None:
+    """Return a Qdrant filter for dominant_item_type based on the queried item's itemType.
+
+    VEG items must match VEG communities only (veg users see only veg).
+    NONVEG items have no restriction (nonveg users see any platter).
+    EGG items match EGG or NONVEG communities (egg dishes won't appear in VEG communities).
+    """
+    if item_type == "VEG":
+        return Filter(must=[FieldCondition(key="dominant_item_type", match=MatchValue(value="VEG"))])
+    if item_type == "EGG":
+        return Filter(must=[FieldCondition(key="dominant_item_type", match=MatchAny(any=["EGG", "NONVEG"]))])
+    return None
+
+
+def find_best_community_with_hint(
+    qdrant, session, vector: list[float], category_hint: str | None, item_type: str | None = None
+) -> dict[str, Any] | None:
+    """Return best community, preferring one whose dominant typecode matches the category hint.
+
+    Fetches top-10 Qdrant candidates, then does one Neo4j query to get each community's
+    dominant Supabase typecode. Picks the highest-scoring candidate whose typecode family
+    matches the hint. Falls back to raw top-1 if no match found.
+
+    item_type (VEG/NONVEG/EGG) restricts Qdrant search to communities of matching type
+    so VEG queries never surface NONVEG communities.
+    """
+    veg_filter = _build_item_type_filter(item_type)
     results = qdrant.query_points(
         collection_name=QDRANT_COLLECTION,
         query=vector,
-        limit=1,
+        limit=10,
         score_threshold=QDRANT_SCORE_THRESHOLD,
         with_payload=True,
+        query_filter=veg_filter,
     ).points
     if not results:
         return None
-    hit = results[0]
-    return {
-        "community_id": hit.payload.get("community_id", ""),
-        "name": hit.payload.get("name", ""),
-        "score": hit.score,
-        "members": hit.payload.get("members", []),
-        "variant_names": hit.payload.get("variant_names", []),
-    }
+
+    def _to_result(hit: Any) -> dict[str, Any]:
+        return {
+            "community_id": hit.payload.get("community_id", ""),
+            "name": hit.payload.get("name", ""),
+            "score": hit.score,
+            "members": hit.payload.get("members", []),
+            "variant_names": hit.payload.get("variant_names", []),
+        }
+
+    if not category_hint:
+        return _to_result(results[0])
+
+    candidate_ids = [hit.payload.get("community_id", "") for hit in results]
+    rows = session.run(FETCH_COMMUNITY_TOP_TYPECODES, community_ids=candidate_ids)
+    # Map community_id → set of typecode families present in that community
+    cid_to_families: dict[str, set[str]] = {}
+    for r in rows:
+        families = {typecode_family(tc) for tc in r["typecodes"] if typecode_family(tc)}
+        cid_to_families[r["cid"]] = families
+
+    for hit in results:
+        cid = hit.payload.get("community_id", "")
+        if category_hint in cid_to_families.get(cid, set()):
+            return _to_result(hit)
+
+    return _to_result(results[0])
 
 
 def find_closest_in_platter(
@@ -253,6 +310,12 @@ WHERE i.name IN $names
 RETURN i.name AS name, i.typecode_name AS typecode
 """
 
+FETCH_ITEM_TYPES_QUERY = """
+MATCH (i:Item)
+WHERE i.name IN $names AND i.itemType IS NOT NULL
+RETURN i.name AS name, i.itemType AS item_type
+"""
+
 
 RESOLVE_CANONICAL_QUERY = """
 MATCH (canonical:Item {source: 'dynamodb'})-[:VARIANT_OF]->(alias:Item {source: 'supabase', name: $name})
@@ -282,7 +345,7 @@ WITH p, total_communities, all_community_ids, community_details,
      collect(DISTINCT pi.name) AS item_names
 OPTIONAL MATCH (p)-[:CONTAINS]->(pi2:Item)-[:MEMBER_OF]->(pi_comm:Community)
 WITH p, total_communities, all_community_ids, community_details, item_names,
-     collect(DISTINCT {item_name: pi2.name, community_id: pi_comm.id}) AS item_comm_pairs
+     collect(DISTINCT {item_name: pi2.name, community_id: pi_comm.id, item_type: pi2.itemType}) AS item_comm_pairs
 OPTIONAL MATCH (p)-[:HAS_CATEGORY]->(pc:PlatterCategory)
 WITH p, total_communities, all_community_ids, community_details, item_names, item_comm_pairs,
      collect(
@@ -372,11 +435,16 @@ def fetch_all_platters(
         family_item_candidates = build_family_item_candidates(platter_item_candidates)
 
         item_community_map: dict[str, str] = {}
+        # Maps community_id → set of itemTypes present in that community within this platter
+        community_item_types: dict[str, set[str]] = {}
         for pair in (rec["item_comm_pairs"] or []):
             cid = pair.get("community_id")
             name = pair.get("item_name")
+            itype = pair.get("item_type")
             if cid and name:
                 item_community_map[cid] = name
+                if itype:
+                    community_item_types.setdefault(cid, set()).add(itype)
 
         platters.append(
             PlatterResult(
@@ -408,6 +476,7 @@ def fetch_all_platters(
                 item_community_map=item_community_map,
                 family_item_candidates=family_item_candidates,
                 community_summaries=community_summaries,
+                community_item_types=community_item_types,
             )
         )
     log.info("Fetched %d platters from Neo4j", len(platters))
@@ -419,18 +488,41 @@ def fetch_all_platters(
 # ---------------------------------------------------------------------------
 
 
+def _community_satisfies_item_type(
+    platter_item_types: set[str], query_item_type: str | None
+) -> bool:
+    """Return True if the platter's items in this community satisfy the query item's type constraint.
+
+    VEG query item → platter must have at least one VEG item in that community.
+    EGG query item → platter must have at least one EGG or NONVEG item in that community.
+    NONVEG query item → any item type is fine.
+    No itemType on query item → no constraint (pass through).
+    """
+    if not query_item_type or not platter_item_types:
+        return True
+    if query_item_type == "VEG":
+        return "VEG" in platter_item_types
+    if query_item_type == "EGG":
+        return bool(platter_item_types & {"EGG", "NONVEG"})
+    return True  # NONVEG — no restriction
+
+
 def compute_coverage_from_seeds(
     platters: list[PlatterResult],
     items: list[str],
     seed_item_to_community_id: dict[str, str | None],
     item_community_name_map: dict[str, str],
+    item_to_item_type: dict[str, str | None] | None = None,
 ) -> None:
     """Score each platter by community-intersection with the query's seed communities.
 
     For each query item, checks whether its globally-matched community_id is present
     in the platter's own community set. O(platters × items) — no Qdrant calls.
+    For VEG query items, also verifies the matched community contains a VEG item in
+    this specific platter (Option B veg matching).
     Mutates each PlatterResult with updated coverage metrics.
     """
+    item_types = item_to_item_type or {}
     query_total = len(items)
     for platter in platters:
         platter_cids = set(platter.all_community_ids)
@@ -442,7 +534,13 @@ def compute_coverage_from_seeds(
 
         for item in items:
             cid = seed_item_to_community_id.get(item)
-            if cid and cid in platter_cids:
+            platter_types_for_cid = platter.community_item_types.get(cid or "", set())
+            query_itype = item_types.get(item)
+            if (
+                cid
+                and cid in platter_cids
+                and _community_satisfies_item_type(platter_types_for_cid, query_itype)
+            ):
                 name = item_community_name_map.get(cid, cid)
                 new_item_to_community[item] = name
                 new_item_to_community_id[item] = cid
@@ -516,6 +614,20 @@ def search_platters(query: str) -> list[PlatterResult]:
     # Resolve Supabase alias names → DynamoDB canonicals before embedding
     with neo4j_session() as session:
         item_to_canonical = resolve_canonical_names(session, items)
+        typecode_rows = session.run(FETCH_SUPABASE_TYPECODES_QUERY, names=items)
+        item_to_typecode: dict[str, str | None] = {r["name"]: r["typecode"] for r in typecode_rows}
+        item_type_rows = session.run(FETCH_ITEM_TYPES_QUERY, names=items)
+        item_to_item_type: dict[str, str | None] = {r["name"]: r["item_type"] for r in item_type_rows}
+
+    # Build category hints from typecodes up front — needed for community fallback below
+    item_to_category: dict[str, str | None] = {}
+    for item in items:
+        family = typecode_family(item_to_typecode.get(item))
+        if family:
+            item_to_category[item] = family
+            log.info("  %r category from typecode %r → %r", item, item_to_typecode.get(item), family)
+        else:
+            item_to_category[item] = None
 
     # Embed canonical names (better community alignment) but key results by original names
     canonical_items = [item_to_canonical[item] for item in items]
@@ -526,34 +638,22 @@ def search_platters(query: str) -> list[PlatterResult]:
     seed_item_to_community_id: dict[str, str | None] = {}
     item_community_name_map: dict[str, str] = {}  # community_id → community name
 
-    for item, vector in zip(items, vectors):
-        canonical = item_to_canonical[item]
-        comm = find_best_community(qdrant, vector)
-        if comm:
-            cid = comm["community_id"]
-            if cid not in seed_community_ids:
-                seed_community_ids.append(cid)
-            seed_item_to_community_id[item] = cid
-            item_community_name_map[cid] = comm["name"]
-            log.info("  %r (canonical: %r) → community %r (score %.3f)", item, canonical, comm["name"], comm["score"])
-        else:
-            seed_item_to_community_id[item] = None
-            log.info("  %r (canonical: %r) → no community found above threshold", item, canonical)
-
     with neo4j_session() as session:
-        # Prefer Supabase typecode_name for category (richer, more accurate than DynamoDB itemCategory).
-        # Fall back to community-derived category for items with no Supabase typecode.
-        typecode_rows = session.run(FETCH_SUPABASE_TYPECODES_QUERY, names=items)
-        item_to_typecode: dict[str, str | None] = {r["name"]: r["typecode"] for r in typecode_rows}
-
-        item_to_category: dict[str, str | None] = {}
-        for item in items:
-            family = typecode_family(item_to_typecode.get(item))
-            if family:
-                item_to_category[item] = family
-                log.info("  %r category from typecode %r → %r", item, item_to_typecode.get(item), family)
+        for item, vector in zip(items, vectors):
+            canonical = item_to_canonical[item]
+            hint = item_to_category.get(item)
+            itype = item_to_item_type.get(item)
+            comm = find_best_community_with_hint(qdrant, session, vector, hint, itype)
+            if comm:
+                cid = comm["community_id"]
+                if cid not in seed_community_ids:
+                    seed_community_ids.append(cid)
+                seed_item_to_community_id[item] = cid
+                item_community_name_map[cid] = comm["name"]
+                log.info("  %r (canonical: %r) → community %r (score %.3f)", item, canonical, comm["name"], comm["score"])
             else:
-                item_to_category[item] = None  # filled in by community fallback below
+                seed_item_to_community_id[item] = None
+                log.info("  %r (canonical: %r) → no community found above threshold", item, canonical)
 
         # Fallback: community-derived category for items without a Supabase typecode
         missing = [item for item, cat in item_to_category.items() if cat is None]
@@ -572,7 +672,7 @@ def search_platters(query: str) -> list[PlatterResult]:
         )
 
     # Coverage via community-set intersection — no additional Qdrant calls needed.
-    compute_coverage_from_seeds(candidates, items, seed_item_to_community_id, item_community_name_map)
+    compute_coverage_from_seeds(candidates, items, seed_item_to_community_id, item_community_name_map, item_to_item_type)
     results = sort_platters_by_final_score(candidates)[:TOP_N_RESULTS]
 
     item_vector_map = dict(zip(items, vectors))

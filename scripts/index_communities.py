@@ -52,8 +52,22 @@ RETURN c.id AS community_id,
        c.member_count AS member_count
 """
 
+FETCH_COMMUNITY_ITEM_TYPES = """
+MATCH (i:Item)-[:MEMBER_OF]->(c:Community)
+WHERE i.itemType IS NOT NULL
+WITH c.id AS community_id, i.itemType AS item_type, count(*) AS cnt
+ORDER BY community_id, cnt DESC
+WITH community_id, collect(item_type)[0] AS dominant_item_type
+RETURN community_id, dominant_item_type
+"""
+
 
 def fetch_communities(session) -> list[dict[str, Any]]:
+    dominant_type_rows = session.run(FETCH_COMMUNITY_ITEM_TYPES)
+    dominant_item_type: dict[str, str] = {
+        r["community_id"]: r["dominant_item_type"] for r in dominant_type_rows
+    }
+
     result = session.run(FETCH_COMMUNITIES)
     communities = []
     for rec in result:
@@ -63,14 +77,16 @@ def fetch_communities(session) -> list[dict[str, Any]]:
         except json.JSONDecodeError:
             log.warning("Invalid summary_json for %s — skipping", rec["community_id"])
             continue
+        cid = rec["community_id"]
         communities.append({
-            "community_id": rec["community_id"],
-            "name": rec["name"] or rec["community_id"],
+            "community_id": cid,
+            "name": rec["name"] or cid,
             "member_count": rec["member_count"] or 0,
             "members": payload.get("members", []),
             "variant_names": payload.get("variant_names", []),
             "hub_items": payload.get("hub_items", []),
             "narrative": payload.get("narrative", ""),
+            "dominant_item_type": dominant_item_type.get(cid, "NONVEG"),
         })
     return communities
 
@@ -131,7 +147,12 @@ def ensure_collection(qdrant) -> None:
         field_name="community_id",
         field_schema=PayloadSchemaType.KEYWORD,
     )
-    log.info("Created Qdrant collection '%s' with community_id index.", QDRANT_COLLECTION)
+    qdrant.create_payload_index(
+        collection_name=QDRANT_COLLECTION,
+        field_name="dominant_item_type",
+        field_schema=PayloadSchemaType.KEYWORD,
+    )
+    log.info("Created Qdrant collection '%s' with community_id + dominant_item_type indexes.", QDRANT_COLLECTION)
 
 
 def community_to_point(community: dict[str, Any], vector: list[float]) -> PointStruct:
@@ -154,6 +175,7 @@ def community_to_point(community: dict[str, Any], vector: list[float]) -> PointS
             "variant_names": community["variant_names"],
             "hub_items": community["hub_items"],
             "member_count": community["member_count"],
+            "dominant_item_type": community["dominant_item_type"],
         },
     )
 

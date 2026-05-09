@@ -8,6 +8,29 @@ from scripts.search import PlatterResult, search_platters
 st.set_page_config(page_title="Platter Search", page_icon="🍽️", layout="centered")
 
 
+def _check_password() -> bool:
+    """Gate the app behind a shared password stored in Streamlit secrets."""
+    expected = st.secrets.get("app_password")
+    if not expected:
+        return True  # Local dev — no password configured
+
+    if st.session_state.get("authenticated"):
+        return True
+
+    st.title("🔒 Platter Search")
+    pw = st.text_input("Password", type="password")
+    if st.button("Enter") and pw == expected:
+        st.session_state["authenticated"] = True
+        st.rerun()
+    elif pw and pw != expected:
+        st.error("Incorrect password.")
+    return False
+
+
+if not _check_password():
+    st.stop()
+
+
 # ---------------------------------------------------------------------------
 # Cached data
 # ---------------------------------------------------------------------------
@@ -52,9 +75,25 @@ if search_clicked and selected:
     if not results:
         st.warning("No matching platters found. Try different dishes.")
     else:
-        st.subheader(f"Top {len(results)} platters")
+        platter_filter = st.radio(
+            "Show platters",
+            options=["All", "VEG only", "NON-VEG only"],
+            horizontal=True,
+        )
 
-        for i, r in enumerate(results, 1):
+        if platter_filter == "VEG only":
+            filtered = [r for r in results if r.veg]
+        elif platter_filter == "NON-VEG only":
+            filtered = [r for r in results if not r.veg]
+        else:
+            filtered = results
+
+        if not filtered:
+            st.info(f"No {platter_filter.lower()} platters in the results.")
+        else:
+            st.subheader(f"Top {len(filtered)} platters")
+
+        for i, r in enumerate(filtered, 1):
             veg_label = "🟢 VEG" if r.veg else "🔴 NON-VEG"
             coverage_label = (
                 f"{r.matched_communities}/{r.query_community_count} dishes matched"
@@ -103,7 +142,9 @@ if search_clicked and selected:
                     category_suffix = f" [{category_name}]" if category_name else ""
 
                     if comm_name and comm_name in r.matched_community_names:
-                        st.write(f"✅ **{item}**{category_suffix} → matched as *{comm_name}*")
+                        actual_item = r.item_community_map.get(cid or "") if cid else None
+                        available_suffix = f" · available as **{actual_item}**" if actual_item and actual_item.lower() != comm_name.lower() else ""
+                        st.write(f"✅ **{item}**{category_suffix} → matched as *{comm_name}*{available_suffix}")
                         if summary:
                             narrative = summary.get("narrative")
                             if narrative:
