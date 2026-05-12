@@ -24,12 +24,17 @@ from qdrant_client.http.models import (
 )
 
 from core.connections import close_connections, get_qdrant_client, neo4j_session
+from core.embedding_text import build_item_embedding_text
 from core.settings import (
     EMBEDDING_DIM,
     EMBEDDING_MODEL,
     OPENAI_API_KEY,
     QDRANT_COLLECTION,
 )
+
+# Cap on how many member descriptions to include in a community's embedding
+# text. Beyond ~10, additional members add noise without adding signal.
+MAX_MEMBER_DESCRIPTIONS = 10
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -61,11 +66,29 @@ WITH community_id, collect(item_type)[0] AS dominant_item_type
 RETURN community_id, dominant_item_type
 """
 
+FETCH_COMMUNITY_MEMBER_METADATA = """
+MATCH (i:Item)-[:MEMBER_OF]->(c:Community)
+WHERE i.llm_description IS NOT NULL
+RETURN c.id AS community_id,
+       collect({
+           name: i.name,
+           item_type: i.itemType,
+           typecode: i.typecode_name,
+           category: i.category_name,
+           description: i.llm_description
+       }) AS members
+"""
+
 
 def fetch_communities(session) -> list[dict[str, Any]]:
     dominant_type_rows = session.run(FETCH_COMMUNITY_ITEM_TYPES)
     dominant_item_type: dict[str, str] = {
         r["community_id"]: r["dominant_item_type"] for r in dominant_type_rows
+    }
+
+    metadata_rows = session.run(FETCH_COMMUNITY_MEMBER_METADATA)
+    member_metadata: dict[str, list[dict[str, Any]]] = {
+        r["community_id"]: r["members"] for r in metadata_rows
     }
 
     result = session.run(FETCH_COMMUNITIES)
@@ -87,6 +110,7 @@ def fetch_communities(session) -> list[dict[str, Any]]:
             "hub_items": payload.get("hub_items", []),
             "narrative": payload.get("narrative", ""),
             "dominant_item_type": dominant_item_type.get(cid, "NONVEG"),
+            "member_metadata": member_metadata.get(cid, []),
         })
     return communities
 
@@ -96,14 +120,39 @@ def fetch_communities(session) -> list[dict[str, Any]]:
 # ---------------------------------------------------------------------------
 
 def build_embedding_text(community: dict[str, Any]) -> str:
-    """Construct the text to embed — includes all alias names for broad matching."""
-    parts = [
-        f"Community: {community['name']}.",
-        f"Members: {', '.join(community['members'])}." if community["members"] else "",
-        f"Also known as: {', '.join(community['variant_names'])}." if community["variant_names"] else "",
-        f"Hub items: {', '.join(community['hub_items'])}." if community["hub_items"] else "",
-        community["narrative"],
-    ]
+    """Construct the text to embed.
+
+    Combines: community name, narrative, aliases, and a rich per-member blob
+    built from each member's llm_description JSON (form, regional tags,
+    cooking method, ingredients). This makes the community vector encode
+    *what the dishes actually are*, not just *what they're called* — so
+    Paneer Butter Masala (creamy North Indian gravy) and Paneer Manchurian
+    (Indo-Chinese stir-fry) land far apart even though both have "Paneer"
+    in their names.
+    """
+    parts: list[str] = [f"Community: {community['name']}."]
+
+    if community["variant_names"]:
+        parts.append(f"Also known as: {', '.join(community['variant_names'])}.")
+    if community["hub_items"]:
+        parts.append(f"Hub items: {', '.join(community['hub_items'])}.")
+    if community["narrative"]:
+        parts.append(community["narrative"])
+
+    member_blobs: list[str] = []
+    for member in community.get("member_metadata", [])[:MAX_MEMBER_DESCRIPTIONS]:
+        blob = build_item_embedding_text(
+            name=member.get("name", ""),
+            item_type=member.get("item_type"),
+            typecode=member.get("typecode"),
+            category=member.get("category"),
+            llm_description=member.get("description"),
+        )
+        if blob:
+            member_blobs.append(blob)
+    if member_blobs:
+        parts.append("Members: " + " ".join(member_blobs))
+
     return " ".join(p for p in parts if p).strip()
 
 

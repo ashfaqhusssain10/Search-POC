@@ -26,6 +26,7 @@ from qdrant_client.models import FieldCondition, Filter, MatchAny, MatchValue
 
 from core.categories import build_category_family_counts, category_family, typecode_family
 from core.connections import close_connections, get_qdrant_client, neo4j_session
+from core.embedding_text import build_item_embedding_text
 from core.settings import (
     EMBEDDING_MODEL,
     OPENAI_API_KEY,
@@ -321,6 +322,17 @@ RESOLVE_CANONICAL_QUERY = """
 MATCH (canonical:Item {source: 'dynamodb'})-[:VARIANT_OF]->(alias:Item {source: 'supabase', name: $name})
 RETURN canonical.name AS canonical_name
 LIMIT 1
+"""
+
+FETCH_ITEM_METADATA_QUERY = """
+MATCH (i:Item)
+WHERE i.name IN $names
+RETURN i.name AS name,
+       i.itemType AS item_type,
+       i.typecode_name AS typecode,
+       i.category_name AS category,
+       i.llm_description AS description,
+       i.source AS source
 """
 
 
@@ -619,6 +631,24 @@ def search_platters(query: str) -> list[PlatterResult]:
         item_type_rows = session.run(FETCH_ITEM_TYPES_QUERY, names=items)
         item_to_item_type: dict[str, str | None] = {r["name"]: r["item_type"] for r in item_type_rows}
 
+        # Fetch full metadata (incl. llm_description) for canonicals so we can
+        # embed enriched text symmetric with the community-side vectors.
+        # Prefer dynamodb source when the same name exists in both.
+        canonical_names = list({item_to_canonical[i] for i in items})
+        meta_rows = session.run(FETCH_ITEM_METADATA_QUERY, names=canonical_names)
+        canonical_metadata: dict[str, dict[str, Any]] = {}
+        for r in meta_rows:
+            existing = canonical_metadata.get(r["name"])
+            if existing and existing.get("source") == "dynamodb":
+                continue
+            canonical_metadata[r["name"]] = {
+                "item_type": r["item_type"],
+                "typecode": r["typecode"],
+                "category": r["category"],
+                "description": r["description"],
+                "source": r["source"],
+            }
+
     # Build category hints from typecodes up front — needed for community fallback below
     item_to_category: dict[str, str | None] = {}
     for item in items:
@@ -629,9 +659,23 @@ def search_platters(query: str) -> list[PlatterResult]:
         else:
             item_to_category[item] = None
 
-    # Embed canonical names (better community alignment) but key results by original names
+    # Build enriched embedding text per canonical (name + metadata + llm_description).
+    # Embedding rich text instead of bare names disambiguates same-token dishes
+    # like Paneer Butter Masala (North Indian gravy) vs Paneer Manchurian (Indo-Chinese).
     canonical_items = [item_to_canonical[item] for item in items]
-    vectors = embed_items(openai_client, canonical_items)
+    enriched_texts: list[str] = []
+    for canonical in canonical_items:
+        meta = canonical_metadata.get(canonical, {})
+        enriched_texts.append(
+            build_item_embedding_text(
+                name=canonical,
+                item_type=meta.get("item_type"),
+                typecode=meta.get("typecode"),
+                category=meta.get("category"),
+                llm_description=meta.get("description"),
+            )
+        )
+    vectors = embed_items(openai_client, enriched_texts)
 
     # Global top-1 lookup per dish — determines community assignment and coverage
     seed_community_ids: list[str] = []
