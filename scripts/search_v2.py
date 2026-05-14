@@ -343,10 +343,20 @@ def search_platters_v2(query: str) -> list[PlatterResultV2]:
     qdrant = get_qdrant_client()
 
     with neo4j_session() as session:
-        item_to_canonical = _resolve_canonicals(session, items)
-        canonical_metadata = _fetch_canonical_metadata(
-            session, [item_to_canonical[i] for i in items]
-        )
+        # ── Canonical resolution disabled per PM (item-to-item match preferred) ──
+        # Previously: user-selected "Garlic Naan" → resolves to canonical
+        # "Rumali Roti" → embeds canonical metadata → searches canonicals.
+        # The "matched as Rumali Roti" intermediate confused users.
+        # Now: embed the user-selected name's OWN metadata, search canonicals
+        # directly. UI surfaces "Garlic Naan → Butter Naan (score)" with no hop.
+        # To revert, uncomment the original two lines and remove the identity map.
+        #
+        # item_to_canonical = _resolve_canonicals(session, items)
+        # canonical_metadata = _fetch_canonical_metadata(
+        #     session, [item_to_canonical[i] for i in items]
+        # )
+        item_to_canonical = {i: i for i in items}
+        canonical_metadata = _fetch_canonical_metadata(session, items)
 
         per_item_matches = _find_canonical_matches(
             qdrant, openai_client, items, item_to_canonical, canonical_metadata,

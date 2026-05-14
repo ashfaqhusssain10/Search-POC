@@ -127,15 +127,13 @@ if search_clicked and selected:
                 st.markdown("**Your dishes:**")
                 for m in r.matches:
                     if m.canonical and m.platter_item_name:
-                        suffix = (
-                            f" · available as **{m.platter_item_name}**"
-                            if m.platter_item_name.lower() != m.canonical.lower()
-                            else ""
-                        )
                         score_txt = f" _(score {m.score:.2f})_" if m.score else ""
-                        st.write(
-                            f"✅ **{m.query_item}** → matched as *{m.canonical}*{suffix}{score_txt}"
-                        )
+                        if m.platter_item_name.lower() == m.query_item.lower():
+                            st.write(f"✅ **{m.query_item}**{score_txt}")
+                        else:
+                            st.write(
+                                f"✅ **{m.query_item}** → **{m.platter_item_name}**{score_txt}"
+                            )
                     else:
                         st.write(f"❌ **{m.query_item}** — not in this platter")
 
