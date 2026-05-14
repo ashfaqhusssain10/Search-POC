@@ -24,15 +24,13 @@ from typing import Any
 from openai import OpenAI
 from qdrant_client.http.models import (
     Distance,
-    FieldCondition,
-    Filter,
-    MatchValue,
     PayloadSchemaType,
     PointStruct,
     VectorParams,
 )
 
 from core.connections import close_connections, get_qdrant_client, neo4j_session
+from core.embedding_text import build_item_embedding_text
 from core.settings import EMBEDDING_DIM, EMBEDDING_MODEL, OPENAI_API_KEY
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
@@ -60,6 +58,7 @@ RETURN i.id AS id,
        i.name AS name,
        i.itemType AS item_type,
        i.itemCategory AS category,
+       i.typecode_name AS typecode,
        i.llm_description AS llm_description
 ORDER BY i.name
 """
@@ -69,6 +68,8 @@ MATCH (i:Item {source: 'supabase'})
 RETURN i.id AS id,
        i.name AS name,
        i.itemType AS item_type,
+       i.category_name AS category,
+       i.typecode_name AS typecode,
        i.llm_description AS llm_description
 ORDER BY i.name
 """
@@ -127,61 +128,21 @@ def _cooking_method(item: dict[str, Any]) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Embedding text builders
+# Embedding text — single shared builder so canonicals, aliases, and query-time
+# enrichment all produce text in the same format. This is what makes the
+# vector space symmetric: master-list items and actual-catalog items embed
+# under the same schema, so similarity scores are meaningful across the two.
 # ---------------------------------------------------------------------------
 
-def canonical_embedding_text(item: dict[str, Any]) -> str:
-    """Rich text for canonicals — name, also_known_as, region, ingredients."""
-    parts = [f"Dish: {item['name']}."]
-
-    # Also known as — critical for matching regional/transliterated aliases
-    aka = _also_known_as(item)
-    if aka:
-        parts.append(f"Also known as: {', '.join(aka)}.")
-
-    cat = item.get("category", "")
-    if cat:
-        parts.append(f"Category: {cat}.")
-    veg = _veg_type(item)
-    if veg:
-        parts.append(f"Type: {veg}.")
-    form = _form(item)
-    if form:
-        parts.append(f"Form: {form}.")
-    ingredients = _ingredients(item)
-    if ingredients:
-        parts.append(f"Ingredients: {', '.join(ingredients[:6])}.")
-    regional = _regional_tags(item)
-    if regional:
-        parts.append(f"Region: {', '.join(regional)}.")
-    cooking = _cooking_method(item)
-    if cooking:
-        parts.append(f"Preparation: {cooking}.")
-    return " ".join(parts)
-
-
-def alias_embedding_text(item: dict[str, Any]) -> str:
-    """Rich text for aliases — name, also_known_as, region, ingredients."""
-    parts = [f"Dish: {item['name']}."]
-
-    # Also known as — ensures alias embeddings surface canonical matches
-    aka = _also_known_as(item)
-    if aka:
-        parts.append(f"Also known as: {', '.join(aka)}.")
-
-    veg = _veg_type(item)
-    if veg:
-        parts.append(f"Type: {veg}.")
-    form = _form(item)
-    if form:
-        parts.append(f"Form: {form}.")
-    ingredients = _ingredients(item)
-    if ingredients:
-        parts.append(f"Ingredients: {', '.join(ingredients[:4])}.")
-    regional = _regional_tags(item)
-    if regional:
-        parts.append(f"Region: {', '.join(regional)}.")
-    return " ".join(parts)
+def item_embedding_text(item: dict[str, Any]) -> str:
+    """Build embedding text via the shared core/embedding_text helper."""
+    return build_item_embedding_text(
+        name=item.get("name", ""),
+        item_type=_veg_type(item) or item.get("item_type"),
+        typecode=item.get("typecode"),
+        category=item.get("category"),
+        llm_description=item.get("llm_description"),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -347,7 +308,7 @@ def main() -> None:
 
     # ── Canonicals ──────────────────────────────────────────────────────────
     log.info("Embedding %d canonicals...", len(canonicals))
-    canonical_texts = [canonical_embedding_text(i) for i in canonicals]
+    canonical_texts = [item_embedding_text(i) for i in canonicals]
     canonical_vectors = embed_all(client, canonical_texts)
 
     ensure_collection(
@@ -361,7 +322,7 @@ def main() -> None:
 
     # ── Aliases ─────────────────────────────────────────────────────────────
     log.info("Embedding %d aliases...", len(aliases))
-    alias_texts = [alias_embedding_text(i) for i in aliases]
+    alias_texts = [item_embedding_text(i) for i in aliases]
     alias_vectors = embed_all(client, alias_texts)
 
     ensure_collection(

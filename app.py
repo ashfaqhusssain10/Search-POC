@@ -11,10 +11,11 @@ import os
 import streamlit as st
 
 from core.connections import neo4j_session
-from scripts.search_v2 import PlatterResultV2, search_platters_v2
+from scripts.search_v3 import PlatterResultV3, search_platters_v3
 
-# ── Old community-based path (kept for easy revert) ─────────────────────────
-# from scripts.search import PlatterResult, search_platters
+# ── Older paths (kept for easy revert) ──────────────────────────────────────
+# from scripts.search import PlatterResult, search_platters             # v1: community-based
+# from scripts.search_v2 import PlatterResultV3, search_platters_v3     # v2: re-embed at query time
 
 st.set_page_config(page_title="Platter Search", page_icon="🍽️", layout="centered")
 
@@ -81,7 +82,7 @@ if search_clicked and selected:
     query = ", ".join(selected)
 
     with st.spinner("Searching..."):
-        results: list[PlatterResultV2] = search_platters_v2(query)
+        results: list[PlatterResultV3] = search_platters_v3(query)
 
     if not results:
         st.warning("No matching platters found. Try different dishes.")
