@@ -67,19 +67,46 @@ RETURN i.name AS name, i.itemType AS item_type
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _veg_filter(item_type: str | None) -> Filter | None:
-    """Dietary as a hard filter — never let similarity override dietary preference."""
-    if item_type and item_type.upper() == "VEG":
-        return Filter(must=[FieldCondition(key="veg_type", match=MatchValue(value="VEG"))])
-    if item_type and item_type.upper() == "EGG":
-        return Filter(must=[FieldCondition(key="veg_type", match=MatchAny(any=["EGG", "NONVEG"]))])
-    return None
+def _build_filter(item_type: str | None, form: str | None) -> Filter | None:
+    """Combined dietary + form filter.
+
+    Dietary (hard match):
+        VEG    → VEG only
+        NONVEG → NONVEG only
+        EGG    → EGG or NONVEG
+
+    Form (hard match, when known):
+        bread, gravy, rice-dish, dry-fry, snack, dessert-sweet, fruit, liquid, ...
+        Constrains the result to the same meal slot — a bread query won't
+        surface a curry or starter just because of shared cuisine tokens.
+
+    None / unknown values are skipped (defensive).
+    """
+    must: list[FieldCondition] = []
+    if item_type:
+        it = item_type.upper()
+        if it == "VEG":
+            must.append(FieldCondition(key="veg_type", match=MatchValue(value="VEG")))
+        elif it == "NONVEG":
+            must.append(FieldCondition(key="veg_type", match=MatchValue(value="NONVEG")))
+        elif it == "EGG":
+            must.append(FieldCondition(key="veg_type", match=MatchAny(any=["EGG", "NONVEG"])))
+    if form:
+        must.append(FieldCondition(key="form", match=MatchValue(value=form)))
+    return Filter(must=must) if must else None
 
 
-def _fetch_alias_vectors(qdrant, names: list[str]) -> dict[str, list[float]]:
-    """Pull stored alias vectors by payload name (scrolls aliases collection)."""
+def _fetch_alias_vectors(
+    qdrant, names: list[str]
+) -> tuple[dict[str, list[float]], dict[str, str | None]]:
+    """Pull stored alias vectors and `form` by payload name.
+
+    Returns (name → vector, name → form). The form is used as a hard filter
+    on the canonical search so a bread query only returns breads, etc.
+    """
     name_set = set(names)
-    found: dict[str, list[float]] = {}
+    vectors: dict[str, list[float]] = {}
+    forms: dict[str, str | None] = {}
     next_offset = None
     while True:
         points, next_offset = qdrant.scroll(
@@ -91,11 +118,12 @@ def _fetch_alias_vectors(qdrant, names: list[str]) -> dict[str, list[float]]:
         )
         for p in points:
             n = p.payload.get("name") if p.payload else None
-            if n in name_set and n not in found:
-                found[n] = p.vector
-        if next_offset is None or len(found) == len(name_set):
+            if n in name_set and n not in vectors:
+                vectors[n] = p.vector
+                forms[n] = p.payload.get("form") if p.payload else None
+        if next_offset is None or len(vectors) == len(name_set):
             break
-    return found
+    return vectors, forms
 
 
 # ---------------------------------------------------------------------------
@@ -111,7 +139,7 @@ def search_items_v4(items: list[str], top_k: int = DEFAULT_TOP_K) -> list[ItemQu
     qdrant = get_qdrant_client()
 
     log.info("Fetching pre-stored vectors for %d items", len(items))
-    name_to_vector = _fetch_alias_vectors(qdrant, items)
+    name_to_vector, name_to_form = _fetch_alias_vectors(qdrant, items)
     missing = [i for i in items if i not in name_to_vector]
     if missing:
         log.warning("  Missing alias vectors for: %s", missing)
@@ -127,13 +155,14 @@ def search_items_v4(items: list[str], top_k: int = DEFAULT_TOP_K) -> list[ItemQu
             results.append(ItemQueryResult(query_item=item, veg_type=item_to_item_type.get(item), hits=[]))
             continue
         veg = item_to_item_type.get(item)
+        form = name_to_form.get(item)
         hits_raw = qdrant.query_points(
             collection_name=CANONICAL_COLLECTION,
             query=vec,
             limit=top_k,
             score_threshold=ITEM_SCORE_THRESHOLD,
             with_payload=True,
-            query_filter=_veg_filter(veg),
+            query_filter=_build_filter(veg, form),
         ).points
         hits = [
             ItemHit(
