@@ -50,10 +50,16 @@ def build_item_embedding_text(
     typecode: str | None = None,
     category: str | None = None,
     llm_description: str | dict | None = None,
+    prose: str | None = None,
 ) -> str:
     """Build a richly-attributed text blob for embedding a single item.
 
     All fields except `name` are optional — missing metadata is silently skipped.
+
+    `prose` (when provided) is the LLM-generated natural-language paragraph
+    describing flavor, texture, and usage context. Appended at the end so the
+    structured signal remains front-loaded but the prose contributes flavor /
+    sensory / usage tokens that the structured fields don't capture.
     """
     parts: list[str] = [f"{name}."]
 
@@ -83,5 +89,8 @@ def build_item_embedding_text(
             parts.append(f"Ingredients: {ingredients}.")
         if also_known:
             parts.append(f"Also known as: {also_known}.")
+
+    if prose:
+        parts.append(prose.strip())
 
     return " ".join(parts).strip()

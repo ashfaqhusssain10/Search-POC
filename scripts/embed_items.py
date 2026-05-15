@@ -59,7 +59,8 @@ RETURN i.id AS id,
        i.itemType AS item_type,
        i.itemCategory AS category,
        i.typecode_name AS typecode,
-       i.llm_description AS llm_description
+       i.llm_description AS llm_description,
+       i.llm_description_prose AS prose
 ORDER BY i.name
 """
 
@@ -70,7 +71,8 @@ RETURN i.id AS id,
        i.itemType AS item_type,
        i.category_name AS category,
        i.typecode_name AS typecode,
-       i.llm_description AS llm_description
+       i.llm_description AS llm_description,
+       i.llm_description_prose AS prose
 ORDER BY i.name
 """
 
@@ -135,13 +137,19 @@ def _cooking_method(item: dict[str, Any]) -> str:
 # ---------------------------------------------------------------------------
 
 def item_embedding_text(item: dict[str, Any]) -> str:
-    """Build embedding text via the shared core/embedding_text helper."""
+    """Build embedding text via the shared core/embedding_text helper.
+
+    Includes the LLM-generated prose paragraph (`llm_description_prose`) when
+    present — adds flavor, texture, and usage signals that the structured
+    fields don't capture.
+    """
     return build_item_embedding_text(
         name=item.get("name", ""),
         item_type=_veg_type(item) or item.get("item_type"),
         typecode=item.get("typecode"),
         category=item.get("category"),
         llm_description=item.get("llm_description"),
+        prose=item.get("prose"),
     )
 
 
@@ -153,17 +161,20 @@ def _point_id(item_id: str, prefix: str = "") -> int:
     """
     Derive a stable non-negative integer Qdrant point ID from an item ID.
 
-    DynamoDB IDs are UUIDs → hashed.
+    DynamoDB IDs are UUIDs → SHA1-hashed for determinism. (Python's built-in
+    hash() is randomized per process via PYTHONHASHSEED, which caused
+    duplicate points on re-runs; SHA1 is deterministic across runs.)
     Supabase IDs are "sub_<int>" → extract the integer (offset to avoid
-    collision with canonical IDs that are also hashed into the same space).
+    collision with canonical IDs).
     """
+    import hashlib
     clean = item_id.removeprefix("sub_")
     try:
         base = int(clean)
-        # Offset supabase IDs into a high range to avoid collision with hashes
         return base + 10_000_000
     except ValueError:
-        return abs(hash(prefix + item_id)) % (10**9)
+        digest = hashlib.sha1((prefix + item_id).encode("utf-8")).hexdigest()
+        return int(digest[:12], 16)  # 48 bits, fits comfortably in int64
 
 
 # ---------------------------------------------------------------------------
