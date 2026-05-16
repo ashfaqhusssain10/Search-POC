@@ -22,6 +22,7 @@ from typing import Any
 from qdrant_client.models import FieldCondition, Filter, MatchAny, MatchValue
 
 from core.connections import close_connections, get_qdrant_client, neo4j_session
+from core.embedding_text import build_item_embedding_text
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -43,6 +44,7 @@ class ItemHit:
     veg_type: str | None
     form: str | None
     category: str | None
+    embedding_text: str | None = None
 
 
 @dataclass
@@ -50,6 +52,7 @@ class ItemQueryResult:
     query_item: str
     veg_type: str | None
     hits: list[ItemHit]
+    query_embedding_text: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -59,13 +62,46 @@ class ItemQueryResult:
 FETCH_ITEM_TYPES_QUERY = """
 MATCH (i:Item {source: 'supabase'})
 WHERE i.name IN $names
-RETURN i.name AS name, i.itemType AS item_type
+RETURN i.name AS name, i.itemType AS item_type, i.llm_description AS llm_description
+"""
+
+FETCH_CANONICAL_DESCRIPTIONS_QUERY = """
+MATCH (i:Item {source: 'dynamodb'})
+WHERE i.name IN $names
+RETURN i.name AS name, i.llm_description AS llm_description
 """
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Form families — semantically close forms that should match each other.
+# Prevents misses when the alias and canonical LLM enrichments disagree on
+# borderline categories (e.g. "stew" vs "gravy", "snack" vs "dry-fry").
+# ---------------------------------------------------------------------------
+
+FORM_FAMILIES: list[set[str]] = [
+    {"gravy", "stew"},          # Dal Makhani, Dal Tadka, Pappu Charu-type items
+    {"dry-fry", "snack"},       # Manchurian, Chicken 65, Tikka-type starters
+    {"soup", "stew"},           # Broths / lentil soups
+]
+
+
+def _expand_form(form: str) -> list[str]:
+    """Return the form plus any family relatives.
+
+    >>> _expand_form("gravy")
+    ['gravy', 'stew']
+    """
+    form_lower = form.strip().lower()
+    expanded = {form_lower}
+    for family in FORM_FAMILIES:
+        if form_lower in family:
+            expanded |= family
+    return sorted(expanded)
+
 
 def _build_filter(item_type: str | None, form: str | None) -> Filter | None:
     """Combined dietary + form filter.
@@ -75,8 +111,9 @@ def _build_filter(item_type: str | None, form: str | None) -> Filter | None:
         NONVEG → NONVEG only
         EGG    → EGG or NONVEG
 
-    Form (hard match, when known):
-        bread, gravy, rice-dish, dry-fry, snack, dessert-sweet, fruit, liquid, ...
+    Form (family match, when known):
+        Uses FORM_FAMILIES to expand the query form to include related forms.
+        e.g. form="gravy" also matches "stew"; form="dry-fry" also matches "snack".
         Constrains the result to the same meal slot — a bread query won't
         surface a curry or starter just because of shared cuisine tokens.
 
@@ -92,7 +129,11 @@ def _build_filter(item_type: str | None, form: str | None) -> Filter | None:
         elif it == "EGG":
             must.append(FieldCondition(key="veg_type", match=MatchAny(any=["EGG", "NONVEG"])))
     if form:
-        must.append(FieldCondition(key="form", match=MatchValue(value=form)))
+        related = _expand_form(form)
+        if len(related) == 1:
+            must.append(FieldCondition(key="form", match=MatchValue(value=related[0])))
+        else:
+            must.append(FieldCondition(key="form", match=MatchAny(any=related)))
     return Filter(must=must) if must else None
 
 
@@ -145,10 +186,14 @@ def search_items_v4(items: list[str], top_k: int = DEFAULT_TOP_K) -> list[ItemQu
         log.warning("  Missing alias vectors for: %s", missing)
 
     with neo4j_session() as session:
-        rows = session.run(FETCH_ITEM_TYPES_QUERY, names=items)
+        rows = list(session.run(FETCH_ITEM_TYPES_QUERY, names=items))
         item_to_item_type: dict[str, str | None] = {r["name"]: r["item_type"] for r in rows}
+        item_to_alias_desc: dict[str, str | None] = {r["name"]: r["llm_description"] for r in rows}
 
     results: list[ItemQueryResult] = []
+    hit_names_collected: set[str] = set()
+    pending: list[tuple[str, list, str | None]] = []  # (query_item, hits_raw, veg)
+
     for item in items:
         vec = name_to_vector.get(item)
         if vec is None:
@@ -164,6 +209,20 @@ def search_items_v4(items: list[str], top_k: int = DEFAULT_TOP_K) -> list[ItemQu
             with_payload=True,
             query_filter=_build_filter(veg, form),
         ).points
+        pending.append((item, hits_raw, veg))
+        for h in hits_raw:
+            n = h.payload.get("name") if h.payload else None
+            if n:
+                hit_names_collected.add(n)
+
+    # Single Neo4j round-trip to fetch llm_description for every canonical hit.
+    canonical_descs: dict[str, str | None] = {}
+    if hit_names_collected:
+        with neo4j_session() as session:
+            for r in session.run(FETCH_CANONICAL_DESCRIPTIONS_QUERY, names=list(hit_names_collected)):
+                canonical_descs[r["name"]] = r["llm_description"]
+
+    for item, hits_raw, veg in pending:
         hits = [
             ItemHit(
                 name=h.payload.get("name", ""),
@@ -171,10 +230,23 @@ def search_items_v4(items: list[str], top_k: int = DEFAULT_TOP_K) -> list[ItemQu
                 veg_type=h.payload.get("veg_type"),
                 form=h.payload.get("form"),
                 category=h.payload.get("category"),
+                embedding_text=build_item_embedding_text(
+                    name=h.payload.get("name", ""),
+                    llm_description=canonical_descs.get(h.payload.get("name", "")),
+                ),
             )
             for h in hits_raw if h.payload.get("name")
         ]
-        results.append(ItemQueryResult(query_item=item, veg_type=veg, hits=hits))
+        results.append(
+            ItemQueryResult(
+                query_item=item,
+                veg_type=veg,
+                hits=hits,
+                query_embedding_text=build_item_embedding_text(
+                    name=item, llm_description=item_to_alias_desc.get(item)
+                ),
+            )
+        )
 
     return results
 

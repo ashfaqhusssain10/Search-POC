@@ -58,9 +58,7 @@ RETURN i.id AS id,
        i.name AS name,
        i.itemType AS item_type,
        i.itemCategory AS category,
-       i.typecode_name AS typecode,
-       i.llm_description AS llm_description,
-       i.llm_description_prose AS prose
+       i.llm_description AS llm_description
 ORDER BY i.name
 """
 
@@ -70,9 +68,7 @@ RETURN i.id AS id,
        i.name AS name,
        i.itemType AS item_type,
        i.category_name AS category,
-       i.typecode_name AS typecode,
-       i.llm_description AS llm_description,
-       i.llm_description_prose AS prose
+       i.llm_description AS llm_description
 ORDER BY i.name
 """
 
@@ -105,28 +101,14 @@ def _veg_type(item: dict[str, Any]) -> str:
 
 
 def _form(item: dict[str, Any]) -> str:
+    """PM-spec `sub_category` is the form (Gravy, Flatbread, Rice Dish, ...)."""
     desc = _parse_desc(item.get("llm_description"))
-    return (desc.get("form") or "").strip().lower()
+    return (desc.get("sub_category") or "").strip().lower()
 
 
 def _ingredients(item: dict[str, Any]) -> list[str]:
     desc = _parse_desc(item.get("llm_description"))
-    return desc.get("ingredients", [])
-
-
-def _also_known_as(item: dict[str, Any]) -> list[str]:
-    desc = _parse_desc(item.get("llm_description"))
-    return [s for s in desc.get("also_known_as", []) if s]
-
-
-def _regional_tags(item: dict[str, Any]) -> list[str]:
-    desc = _parse_desc(item.get("llm_description"))
-    return [s for s in desc.get("regional_tags", []) if s]
-
-
-def _cooking_method(item: dict[str, Any]) -> str:
-    desc = _parse_desc(item.get("llm_description"))
-    return (desc.get("cooking_method(recipe)") or "").strip()
+    return desc.get("primary_ingredients", []) or []
 
 
 # ---------------------------------------------------------------------------
@@ -137,19 +119,10 @@ def _cooking_method(item: dict[str, Any]) -> str:
 # ---------------------------------------------------------------------------
 
 def item_embedding_text(item: dict[str, Any]) -> str:
-    """Build embedding text via the shared core/embedding_text helper.
-
-    Includes the LLM-generated prose paragraph (`llm_description_prose`) when
-    present — adds flavor, texture, and usage signals that the structured
-    fields don't capture.
-    """
+    """Build the PM-spec embedding blob via the shared helper."""
     return build_item_embedding_text(
         name=item.get("name", ""),
-        item_type=_veg_type(item) or item.get("item_type"),
-        typecode=item.get("typecode"),
-        category=item.get("category"),
         llm_description=item.get("llm_description"),
-        prose=item.get("prose"),
     )
 
 

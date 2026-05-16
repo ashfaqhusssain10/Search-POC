@@ -100,6 +100,9 @@ if search_clicked and selected:
             header = f"**{r.query_item}**  {veg_badge}"
 
             with st.expander(header, expanded=True):
+                if r.query_embedding_text:
+                    st.caption("**Query embedding text**")
+                    st.code(r.query_embedding_text, language=None)
                 if not r.hits:
                     st.warning("No hits returned for this item.")
                     continue
@@ -109,6 +112,8 @@ if search_clicked and selected:
                     st.write(
                         f"**#{rank}**  `{h.score:.3f}`  **{h.name}**{meta_suffix}"
                     )
+                    if h.embedding_text:
+                        st.code(h.embedding_text, language=None)
 
 
 # ---------------------------------------------------------------------------

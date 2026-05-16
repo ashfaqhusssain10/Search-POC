@@ -1,7 +1,15 @@
 """Step 0: Enrich DynamoDB and Supabase CSVs with LLM-generated item descriptions.
 
-For each item, Gemini generates a structured description:
-  {ingredients, form, cooking_method, veg_type, regional_tags, also_known_as}
+For each item, Gemini generates a structured description in the PM-spec schema:
+  {
+    cuisine, category, sub_category, primary_ingredients,
+    cooking_method, flavor_profile, texture, regional_variant, veg_type
+  }
+
+These fields define what the dish IS, TASTES like, and how it's SERVED, and
+are concatenated into a single embedding blob downstream (see
+core.embedding_text). `veg_type` is retained as a structured field because the
+search path filters on it.
 
 This description is written to a new `llm_description` column and the CSVs are
 overwritten in place. load_items.py then loads this field into Neo4j.
@@ -35,24 +43,28 @@ BATCH_SIZE = 50
 MAX_RETRIES = 3
 RETRY_DELAY = 5.0
 
-FORM_VOCAB = (
-    "rice-dish | gravy | dry-fry | stew | bread | dessert-sweet | "
-    "snack | salad | drink | soup | side-accompaniment | fruit"
-)
-
 CACHE_DIR = Path("llm_cache/enrichment")
 
-SYSTEM_PROMPT = f"""You are a culinary expert specializing in Indian cuisine.
-Given a list of dish names (with optional hints), generate a structured description for each.
+SYSTEM_PROMPT = """You are a culinary expert specializing in Indian cuisine.
+Given a list of dish names (with optional hints, including the catalog's
+declared veg/non-veg classification), generate a structured description for
+each.
 
-For each dish return a JSON object with these exact keys:
-  - ingredients: list of main ingredients (be specific, e.g. "basmati rice" not just "rice")
-  - form: one value from this vocabulary: {FORM_VOCAB}
-  - cooking_method(recipe): e.g. "dum-cooked", "deep-fried", "tandoor", "steamed", "slow-cooked"
-  - veg_type: exactly "VEG", "NONVEG", or "EGG"
-  - regional_tags: list of regional/cuisine styles (e.g. ["Hyderabadi", "South Indian"])
-  - also_known_as: list of alternate names or regional synonyms you know (can be empty list)
+For each dish return a JSON object with EXACTLY these keys:
+  - cuisine             : high-level cuisine label (e.g. "North Indian", "South Indian", "Indo-Chinese", "Mughlai")
+  - category            : course/meal slot (e.g. "Main Course", "Starter", "Dessert", "Bread", "Rice", "Beverage", "Side")
+  - sub_category        : physical form (e.g. "Gravy", "Dry", "Flatbread", "Rice Dish", "Sweet", "Snack", "Soup", "Salad")
+  - primary_ingredients : list of 4-6 KEY ingredients, title-cased (e.g. ["Paneer", "Tomato", "Butter", "Cream", "Cashew"])
+  - cooking_method      : short phrase (e.g. "Slow cooked gravy", "Deep fried", "Tandoor baked", "Dum cooked")
+  - flavor_profile      : 3-5 short adjectives, comma-joined (e.g. "Rich, Creamy, Mildly Spiced, Slightly Sweet")
+  - texture             : one short phrase describing mouthfeel (e.g. "Smooth gravy with soft paneer cubes")
+  - regional_variant    : specific regional style if applicable (e.g. "Punjabi", "Hyderabadi", "Chettinad"); "" if none
+  - veg_type            : exactly "VEG", "NONVEG", or "EGG" (respect the hint when provided)
 
+Rules:
+  - Be specific and sensory. "Rich, creamy" beats "delicious".
+  - Don't invent facts. If unsure of a regional variant, return an empty string.
+  - Respect the veg_type hint when provided — don't reclassify the dish.
 
 Respond with a JSON array, one object per input dish, in the same order as the input.
 No explanation, no wrapper keys — just the array."""

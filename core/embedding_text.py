@@ -1,22 +1,23 @@
-"""Shared helper that turns an Item's metadata into rich embedding text.
+"""Shared helper that turns an Item's PM-spec metadata into the embedding blob.
 
-Used by both ingest (variant generation, community indexing) and query
-(search) so that vector-space alignment between queries and stored
-documents is symmetric.
+Used by both ingest (item embedding) and any query-time enrichment so that
+vector-space alignment between query items and stored documents is symmetric.
 
-The format keeps the dish name prominent (so name-based matching still
-works) but adds discriminative attributes from llm_description JSON:
-form, regional tags, cooking method, ingredients. This separates
-semantically distinct dishes (e.g. Paneer Butter Masala vs Paneer
-Manchurian) that would otherwise collide in name-only embeddings.
+The blob is a single line built from the PM-spec fields stored on each Item
+(produced by `scripts.enrich_items`):
+
+    <Name>. <Cuisine> <category> <sub_category> dish.
+    Made with <primary_ingredients>. <cooking_method>.
+    <flavor_profile>. <texture>. <regional_variant> style.
+
+Missing fields are silently skipped. The dish name stays first so name-based
+matching still works; sensory and usage signal follows.
 """
 
 from __future__ import annotations
 
 import json
 from typing import Any
-
-MAX_INGREDIENTS = 8
 
 
 def _parse_description(raw: str | dict | None) -> dict[str, Any]:
@@ -31,66 +32,55 @@ def _parse_description(raw: str | dict | None) -> dict[str, Any]:
         return {}
 
 
-def _join_list(value: Any, limit: int | None = None) -> str:
+def _join(value: Any) -> str:
     if not value:
         return ""
     if isinstance(value, str):
-        return value
+        return value.strip()
     if isinstance(value, list):
-        items = [str(v).strip() for v in value if v]
-        if limit:
-            items = items[:limit]
-        return ", ".join(items)
+        return ", ".join(str(v).strip() for v in value if v)
     return str(value)
 
 
 def build_item_embedding_text(
     name: str,
-    item_type: str | None = None,
-    typecode: str | None = None,
-    category: str | None = None,
     llm_description: str | dict | None = None,
-    prose: str | None = None,
 ) -> str:
-    """Build a richly-attributed text blob for embedding a single item.
+    """Build the PM-spec embedding blob for a single item.
 
-    All fields except `name` are optional — missing metadata is silently skipped.
-
-    `prose` (when provided) is the LLM-generated natural-language paragraph
-    describing flavor, texture, and usage context. Appended at the end so the
-    structured signal remains front-loaded but the prose contributes flavor /
-    sensory / usage tokens that the structured fields don't capture.
+    `llm_description` is the JSON (or already-parsed dict) produced by
+    `scripts.enrich_items`. All fields except `name` are optional — missing
+    metadata is silently skipped.
     """
+    desc = _parse_description(llm_description)
+
+    cuisine = (desc.get("cuisine") or "").strip()
+    category = (desc.get("category") or "").strip()
+    sub_category = (desc.get("sub_category") or "").strip()
+    ingredients = _join(desc.get("primary_ingredients"))
+    cooking = (desc.get("cooking_method") or "").strip()
+    flavor = (desc.get("flavor_profile") or "").strip()
+    texture = (desc.get("texture") or "").strip()
+    regional = (desc.get("regional_variant") or "").strip()
+
     parts: list[str] = [f"{name}."]
 
-    type_bits: list[str] = []
-    if item_type:
-        type_bits.append(item_type)
-    if typecode:
-        type_bits.append(typecode)
-    if type_bits:
-        parts.append(f"{' '.join(type_bits)}.")
+    header_bits = [
+        b for b in (cuisine, category.lower() if category else "", sub_category.lower() if sub_category else "")
+        if b
+    ]
+    if header_bits:
+        parts.append(f"{' '.join(header_bits)} dish.")
 
-    if category:
-        parts.append(f"Category: {category}.")
-
-    desc = _parse_description(llm_description)
-    if desc:
-        regional = _join_list(desc.get("regional_tags"))
-        form = desc.get("form")
-        cooking = desc.get("cooking_method(recipe)") or desc.get("cooking_method")
-        ingredients = _join_list(desc.get("ingredients"), limit=MAX_INGREDIENTS)
-        also_known = _join_list(desc.get("also_known_as"), limit=5)
-
-        profile_bits = [bit for bit in (regional, form, cooking) if bit]
-        if profile_bits:
-            parts.append(f"{' '.join(profile_bits)}.")
-        if ingredients:
-            parts.append(f"Ingredients: {ingredients}.")
-        if also_known:
-            parts.append(f"Also known as: {also_known}.")
-
-    if prose:
-        parts.append(prose.strip())
+    if ingredients:
+        parts.append(f"Made with {ingredients}.")
+    if cooking:
+        parts.append(f"{cooking}.")
+    if flavor:
+        parts.append(f"{flavor}.")
+    if texture:
+        parts.append(f"{texture}.")
+    if regional:
+        parts.append(f"{regional} style.")
 
     return " ".join(parts).strip()
