@@ -44,26 +44,77 @@ MAX_RETRIES = 3
 RETRY_DELAY = 5.0
 
 CACHE_DIR = Path("llm_cache/enrichment")
+VOCAB_DIR = Path("vocab")
 
-SYSTEM_PROMPT = """You are a culinary expert specializing in Indian cuisine.
+# Fields constrained by closed vocabularies discovered via `discover_vocab.py`.
+# Each value here is loaded from vocab/<field>.json as {canonical: [synonyms]}.
+CLOSED_VOCAB_FIELDS = ("cuisine", "category", "sub_category", "cooking_method", "regional_variant")
+
+
+def _load_vocab() -> dict[str, dict[str, list[str]]]:
+    """Load vocab/{field}.json into a {field: {canonical: [synonyms]}} map."""
+    vocabs: dict[str, dict[str, list[str]]] = {}
+    for field in CLOSED_VOCAB_FIELDS:
+        path = VOCAB_DIR / f"{field}.json"
+        if not path.exists():
+            raise FileNotFoundError(
+                f"Missing {path}. Run `python -m scripts.discover_vocab` first."
+            )
+        vocabs[field] = json.loads(path.read_text())
+    return vocabs
+
+
+def _build_normalizer(vocabs: dict[str, dict[str, list[str]]]) -> dict[str, dict[str, str]]:
+    """Reverse vocab into a {field: {raw_value_lower: canonical}} lookup."""
+    normalizer: dict[str, dict[str, str]] = {}
+    for field, clusters in vocabs.items():
+        lookup: dict[str, str] = {}
+        for canonical, synonyms in clusters.items():
+            lookup[canonical.strip().lower()] = canonical
+            for syn in synonyms:
+                lookup[syn.strip().lower()] = canonical
+        normalizer[field] = lookup
+    return normalizer
+
+
+def _format_vocab_for_prompt(vocabs: dict[str, dict[str, list[str]]]) -> str:
+    """Render the closed vocab as a bullet list for the system prompt."""
+    sections = []
+    for field in CLOSED_VOCAB_FIELDS:
+        labels = list(vocabs[field].keys())
+        sections.append(f"  {field}: {', '.join(repr(l) for l in labels)}")
+    return "\n".join(sections)
+
+
+VOCABS = _load_vocab()
+NORMALIZER = _build_normalizer(VOCABS)
+
+SYSTEM_PROMPT = f"""You are a culinary expert specializing in Indian cuisine.
 Given a list of dish names (with optional hints, including the catalog's
 declared veg/non-veg classification), generate a structured description for
 each.
 
 For each dish return a JSON object with EXACTLY these keys:
-  - cuisine             : high-level cuisine label (e.g. "North Indian", "South Indian", "Indo-Chinese", "Mughlai")
-  - category            : course/meal slot (e.g. "Main Course", "Starter", "Dessert", "Bread", "Rice", "Beverage", "Side")
-  - sub_category        : physical form (e.g. "Gravy", "Dry", "Flatbread", "Rice Dish", "Sweet", "Snack", "Soup", "Salad")
+  - cuisine             : pick ONE value from the closed list below
+  - category            : pick ONE value from the closed list below
+  - sub_category        : pick ONE value from the closed list below
   - primary_ingredients : list of 4-6 KEY ingredients, title-cased (e.g. ["Paneer", "Tomato", "Butter", "Cream", "Cashew"])
-  - cooking_method      : short phrase (e.g. "Slow cooked gravy", "Deep fried", "Tandoor baked", "Dum cooked")
+  - cooking_method      : pick ONE value from the closed list below
   - flavor_profile      : 3-5 short adjectives, comma-joined (e.g. "Rich, Creamy, Mildly Spiced, Slightly Sweet")
   - texture             : one short phrase describing mouthfeel (e.g. "Smooth gravy with soft paneer cubes")
-  - regional_variant    : specific regional style if applicable (e.g. "Punjabi", "Hyderabadi", "Chettinad"); "" if none
+  - regional_variant    : pick ONE value from the closed list below, or "" if none applies
   - veg_type            : exactly "VEG", "NONVEG", or "EGG" (respect the hint when provided)
 
+Closed vocabularies (the values for these fields MUST come from these lists,
+copied verbatim — same casing, same spelling):
+{_format_vocab_for_prompt(VOCABS)}
+
 Rules:
-  - Be specific and sensory. "Rich, creamy" beats "delicious".
-  - Don't invent facts. If unsure of a regional variant, return an empty string.
+  - For the 5 closed-vocab fields, pick the single best fit. Do NOT invent new
+    values, do NOT combine values, do NOT pluralize or rephrase.
+  - If no value in a closed list fits well, pick the closest reasonable one.
+  - Be specific and sensory for flavor_profile and texture. "Rich, creamy"
+    beats "delicious".
   - Respect the veg_type hint when provided — don't reclassify the dish.
 
 Respond with a JSON array, one object per input dish, in the same order as the input.
@@ -77,6 +128,29 @@ No explanation, no wrapper keys — just the array."""
 def make_client() -> genai.Client:
     """Return a configured Gemini client."""
     return genai.Client(api_key=GEMINI_API_KEY)
+
+
+def _normalize_closed_fields(desc: dict[str, Any], batch_label: str) -> None:
+    """Snap closed-vocab values onto the canonical label in-place.
+
+    If a value can't be matched even after lowercasing/stripping, leave it
+    untouched and log a warning — we want visibility into LLM drift rather
+    than silently mapping to a default.
+    """
+    for field in CLOSED_VOCAB_FIELDS:
+        raw = desc.get(field)
+        if not raw or not isinstance(raw, str):
+            continue
+        key = raw.strip().lower()
+        canonical = NORMALIZER[field].get(key)
+        if canonical is None and field == "regional_variant" and key == "":
+            continue
+        if canonical is None:
+            log.warning("Batch %s: '%s' for field '%s' not in vocab — leaving as-is",
+                        batch_label, raw, field)
+            continue
+        if canonical != raw:
+            desc[field] = canonical
 
 
 # ---------------------------------------------------------------------------
@@ -112,6 +186,13 @@ def enrich_batch(
             )
             raw = response.text
             parsed = json.loads(raw)
+
+            # Normalize closed-vocab fields against vocab/*.json so anything the
+            # LLM drifted on gets snapped back to the canonical label.
+            if isinstance(parsed, list):
+                for desc in parsed:
+                    if isinstance(desc, dict):
+                        _normalize_closed_fields(desc, batch_label)
 
             # Cache raw response
             CACHE_DIR.mkdir(parents=True, exist_ok=True)
