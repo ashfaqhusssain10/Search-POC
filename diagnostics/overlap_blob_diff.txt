@@ -1,0 +1,666 @@
+============================================================================================
+[EMPTY]  Allam Chutney
+--------------------------------------------------------------------------------------------
+  field                  SUPABASE (alias)                 DYNAMODB (canonical)            
+  ---------------------- -------------------------------- --------------------------------
+  cuisine                South Indian                     South Indian                    
+  category               Side                             Side                            
+ ≠sub_category           Paste/Dip                        Chutney                         
+ ≠cooking_method         Blended and tempered             Ground and tempered             
+  flavor_profile         Spicy, Tangy, Sweet, Pungent     Spicy, Tangy, Sweet, Pungent    
+ ≠texture                Coarse, thick paste              Smooth to coarse paste          
+  regional_variant       Andhra                           Andhra                          
+  veg_type               VEG                              VEG                             
+  primary_ingredients    Ginger, Tamarind, Jaggery, Red C Ginger, Tamarind, Jaggery, Red C
+
+  Supabase blob :  Allam Chutney. South Indian side paste/dip dish. Made with Ginger, Tamarind, Jaggery, Red Chili, Mustard Seeds, Garlic. Blended and tempered. Spicy, Tangy, Sweet, Pungent. Coarse, thick paste. Andhra style.
+  DynamoDB blob :  Allam Chutney. South Indian side chutney dish. Made with Ginger, Tamarind, Jaggery, Red Chili, Mustard Seeds, Curry Leaves. Ground and tempered. Spicy, Tangy, Sweet, Pungent. Smooth to coarse paste. Andhra style.
+
+============================================================================================
+[EMPTY]  Beerakaya Pappu
+--------------------------------------------------------------------------------------------
+  field                  SUPABASE (alias)                 DYNAMODB (canonical)            
+  ---------------------- -------------------------------- --------------------------------
+  cuisine                South Indian                     South Indian                    
+  category               Main Course                      Main Course                     
+ ≠sub_category           Lentil Stew                      Dal                             
+  cooking_method         Pressure cooked and tempered     Pressure cooked and tempered    
+ ≠flavor_profile         Savory, Mildly Spiced, Tangy, Ea Mildly Spiced, Savory, Tangy, Ea
+ ≠texture                Smooth, comforting lentil stew w Smooth, slightly chunky dal with
+  regional_variant       Andhra                           Andhra                          
+  veg_type               VEG                              VEG                             
+  primary_ingredients    Ridge Gourd, Toor Dal, Tamarind, Ridge Gourd, Toor Dal, Tamarind,
+
+  Supabase blob :  Beerakaya Pappu. South Indian main course lentil stew dish. Made with Ridge Gourd, Toor Dal, Tamarind, Green Chili, Garlic, Spices. Pressure cooked and tempered. Savory, Mildly Spiced, Tangy, Earthy. Smooth, comforting lentil stew with soft vegetables. Andhra style.
+  DynamoDB blob :  Beerakaya Pappu. South Indian main course dal dish. Made with Ridge Gourd, Toor Dal, Tamarind, Green Chilies, Mustard Seeds, Curry Leaves. Pressure cooked and tempered. Mildly Spiced, Savory, Tangy, Earthy. Smooth, slightly chunky dal with soft gourd pieces. Andhra style.
+
+============================================================================================
+[MISS]  Bhindi Peanut Fry
+--------------------------------------------------------------------------------------------
+  field                  SUPABASE (alias)                 DYNAMODB (canonical)            
+  ---------------------- -------------------------------- --------------------------------
+ ≠cuisine                Indian                           South Indian                    
+  category               Side                             Side                            
+ ≠sub_category           Dry Vegetable                    Dry                             
+ ≠cooking_method         Pan fried                        Stir-fried                      
+ ≠flavor_profile         Savory, Mildly Spiced, Nutty     Savory, Nutty, Mildly Spiced, Cr
+ ≠texture                Crisp-tender okra with crunchy p Crispy okra with crunchy peanuts
+ ≠regional_variant                                        Andhra                          
+  veg_type               VEG                              VEG                             
+ ≠primary_ingredients    Okra, Peanuts, Onion, Spices, Oi Okra, Peanuts, Onion, Garlic, Ch
+
+  Supabase blob :  Bhindi Peanut Fry. Indian side dry vegetable dish. Made with Okra, Peanuts, Onion, Spices, Oil. Pan fried. Savory, Mildly Spiced, Nutty. Crisp-tender okra with crunchy peanuts.
+  DynamoDB blob :  Bhindi Peanut Fry. South Indian side dry dish. Made with Okra, Peanuts, Onion, Garlic, Chili Powder, Cumin. Stir-fried. Savory, Nutty, Mildly Spiced, Crispy. Crispy okra with crunchy peanuts. Andhra style.
+
+============================================================================================
+[MISS]  Brownie
+--------------------------------------------------------------------------------------------
+  field                  SUPABASE (alias)                 DYNAMODB (canonical)            
+  ---------------------- -------------------------------- --------------------------------
+ ≠cuisine                Continental                      Western                         
+  category               Dessert                          Dessert                         
+ ≠sub_category           Baked Good                       Sweet                           
+  cooking_method         Baked                            Baked                           
+ ≠flavor_profile         Rich, Sweet, Chocolatey, Fudgy   Sweet, Rich, Chocolaty, Dense   
+ ≠texture                Dense, fudgy, slightly chewy     Fudgy, chewy, moist             
+  regional_variant                                                                        
+  veg_type               VEG                              VEG                             
+  primary_ingredients    Chocolate, Flour, Sugar, Butter, Chocolate, Flour, Sugar, Butter,
+
+  Supabase blob :  Brownie. Continental dessert baked good dish. Made with Chocolate, Flour, Sugar, Butter, Cocoa Powder, Vanilla Extract. Baked. Rich, Sweet, Chocolatey, Fudgy. Dense, fudgy, slightly chewy.
+  DynamoDB blob :  Brownie. Western dessert sweet dish. Made with Chocolate, Flour, Sugar, Butter, Cocoa Powder, Vanilla Extract. Baked. Sweet, Rich, Chocolaty, Dense. Fudgy, chewy, moist.
+
+============================================================================================
+[MISS]  Chicken 65
+--------------------------------------------------------------------------------------------
+  field                  SUPABASE (alias)                 DYNAMODB (canonical)            
+  ---------------------- -------------------------------- --------------------------------
+  cuisine                South Indian                     South Indian                    
+  category               Starter                          Starter                         
+ ≠sub_category           Snack                            Dry                             
+ ≠cooking_method         Deep fried and tossed            Deep fried                      
+ ≠flavor_profile         Spicy, Tangy, Aromatic, Savory   Spicy, Tangy, Savory, Aromatic  
+ ≠texture                Crispy exterior, tender chicken  Crispy exterior, juicy tender ch
+  regional_variant       Chennai                          Chennai                         
+  veg_type               NONVEG                           NONVEG                          
+ ≠primary_ingredients    Chicken, Curry Leaves, Ginger-Ga Chicken, Curry Leaves, Green Chi
+
+  Supabase blob :  Chicken 65. South Indian starter snack dish. Made with Chicken, Curry Leaves, Ginger-Garlic Paste, Chili Powder, Yogurt. Deep fried and tossed. Spicy, Tangy, Aromatic, Savory. Crispy exterior, tender chicken interior. Chennai style.
+  DynamoDB blob :  Chicken 65. South Indian starter dry dish. Made with Chicken, Curry Leaves, Green Chilies, Ginger-Garlic Paste, Yogurt, Rice Flour. Deep fried. Spicy, Tangy, Savory, Aromatic. Crispy exterior, juicy tender chicken. Chennai style.
+
+============================================================================================
+[EMPTY]  Chicken Alfredo Pasta
+--------------------------------------------------------------------------------------------
+  field                  SUPABASE (alias)                 DYNAMODB (canonical)            
+  ---------------------- -------------------------------- --------------------------------
+ ≠cuisine                Indo-Western                     Italian                         
+  category               Main Course                      Main Course                     
+ ≠sub_category           Pasta                            Pasta Dish                      
+  cooking_method         Pan cooked                       Pan cooked                      
+ ≠flavor_profile         Creamy, Cheesy, Savory, Mild     Rich, Creamy, Savory, Cheesy    
+  texture                Al dente pasta with tender chick Al dente pasta with tender chick
+  regional_variant                                                                        
+  veg_type               NONVEG                           NONVEG                          
+ ≠primary_ingredients    Pasta, Chicken, Cream, Parmesan  Pasta, Chicken Breast, Heavy Cre
+
+  Supabase blob :  Chicken Alfredo Pasta. Indo-Western main course pasta dish. Made with Pasta, Chicken, Cream, Parmesan Cheese, Garlic, Butter. Pan cooked. Creamy, Cheesy, Savory, Mild. Al dente pasta with tender chicken in a smooth, rich sauce.
+  DynamoDB blob :  Chicken Alfredo Pasta. Italian main course pasta dish dish. Made with Pasta, Chicken Breast, Heavy Cream, Parmesan Cheese, Garlic, Butter. Pan cooked. Rich, Creamy, Savory, Cheesy. Al dente pasta with tender chicken in a thick sauce.
+
+============================================================================================
+[EMPTY]  Chicken Soft Noodles
+--------------------------------------------------------------------------------------------
+  field                  SUPABASE (alias)                 DYNAMODB (canonical)            
+  ---------------------- -------------------------------- --------------------------------
+  cuisine                Indo-Chinese                     Indo-Chinese                    
+  category               Main Course                      Main Course                     
+ ≠sub_category           Noodles                          Noodle Dish                     
+ ≠cooking_method         Wok-tossed                       Stir-fried                      
+ ≠flavor_profile         Savory, Umami, Mildly Spiced, Ga Savory, Umami, Mildly Spicy, Tan
+ ≠texture                Soft, slippery noodles with tend Soft noodles with tender chicken
+  regional_variant                                                                        
+  veg_type               NONVEG                           NONVEG                          
+  primary_ingredients    Noodles, Chicken, Cabbage, Carro Noodles, Chicken, Cabbage, Carro
+
+  Supabase blob :  Chicken Soft Noodles. Indo-Chinese main course noodles dish. Made with Noodles, Chicken, Cabbage, Carrot, Soy Sauce. Wok-tossed. Savory, Umami, Mildly Spiced, Garlicky. Soft, slippery noodles with tender chicken and crunchy vegetables.
+  DynamoDB blob :  Chicken Soft Noodles. Indo-Chinese main course noodle dish dish. Made with Noodles, Chicken, Cabbage, Carrots, Bell Peppers, Soy Sauce. Stir-fried. Savory, Umami, Mildly Spicy, Tangy. Soft noodles with tender chicken and crisp vegetables.
+
+============================================================================================
+[EMPTY]  Coffee
+--------------------------------------------------------------------------------------------
+  field                  SUPABASE (alias)                 DYNAMODB (canonical)            
+  ---------------------- -------------------------------- --------------------------------
+ ≠cuisine                Beverage                         Continental                     
+  category               Beverage                         Beverage                        
+ ≠sub_category           Hot Beverage                     Hot Drink                       
+  cooking_method         Brewed                           Brewed                          
+ ≠flavor_profile         Bitter, Aromatic, Robust         Bitter, Aromatic, Robust, Creamy
+  texture                Smooth liquid                    Smooth liquid                   
+  regional_variant                                                                        
+  veg_type               VEG                              VEG                             
+  primary_ingredients    Coffee Beans, Water, Milk, Sugar Coffee Beans, Water, Milk, Sugar
+
+  Supabase blob :  Coffee. Beverage beverage hot beverage dish. Made with Coffee Beans, Water, Milk, Sugar. Brewed. Bitter, Aromatic, Robust. Smooth liquid.
+  DynamoDB blob :  Coffee. Continental beverage hot drink dish. Made with Coffee Beans, Water, Milk, Sugar. Brewed. Bitter, Aromatic, Robust, Creamy. Smooth liquid.
+
+============================================================================================
+[MISS]  Cookies
+--------------------------------------------------------------------------------------------
+  field                  SUPABASE (alias)                 DYNAMODB (canonical)            
+  ---------------------- -------------------------------- --------------------------------
+ ≠cuisine                Bakery                           Western                         
+  category               Dessert                          Dessert                         
+ ≠sub_category           Baked Good                       Sweet                           
+  cooking_method         Baked                            Baked                           
+  flavor_profile         Sweet, Buttery, Crispy           Sweet, Buttery, Crispy          
+  texture                Crisp, crumbly                   Crisp, crumbly                  
+  regional_variant                                                                        
+  veg_type               VEG                              VEG                             
+ ≠primary_ingredients    Flour, Butter, Sugar, Vanilla Ex Flour, Sugar, Butter, Baking Pow
+
+  Supabase blob :  Cookies. Bakery dessert baked good dish. Made with Flour, Butter, Sugar, Vanilla Extract, Baking Powder. Baked. Sweet, Buttery, Crispy. Crisp, crumbly.
+  DynamoDB blob :  Cookies. Western dessert sweet dish. Made with Flour, Sugar, Butter, Baking Powder, Flavoring. Baked. Sweet, Buttery, Crispy. Crisp, crumbly.
+
+============================================================================================
+[MISS]  Crispy Corn
+--------------------------------------------------------------------------------------------
+  field                  SUPABASE (alias)                 DYNAMODB (canonical)            
+  ---------------------- -------------------------------- --------------------------------
+  cuisine                Indo-Chinese                     Indo-Chinese                    
+  category               Starter                          Starter                         
+ ≠sub_category           Dry                              Snack                           
+  cooking_method         Deep fried and stir-fried        Deep fried and stir-fried       
+ ≠flavor_profile         Crispy, Spicy, Savory, Slightly  Crispy, Spicy, Sweet, Savory    
+ ≠texture                Crunchy corn kernels with a ligh Crunchy exterior, tender corn ke
+  regional_variant                                                                        
+  veg_type               VEG                              VEG                             
+ ≠primary_ingredients    Sweet Corn, Cornflour, Spices, O Sweet Corn, Cornflour, Rice Flou
+
+  Supabase blob :  Crispy Corn. Indo-Chinese starter dry dish. Made with Sweet Corn, Cornflour, Spices, Onion, Bell Peppers, Oil. Deep fried and stir-fried. Crispy, Spicy, Savory, Slightly Sweet. Crunchy corn kernels with a light coating.
+  DynamoDB blob :  Crispy Corn. Indo-Chinese starter snack dish. Made with Sweet Corn, Cornflour, Rice Flour, Chili Powder, Spring Onion, Garlic. Deep fried and stir-fried. Crispy, Spicy, Sweet, Savory. Crunchy exterior, tender corn kernels inside.
+
+============================================================================================
+[MISS]  Curd
+--------------------------------------------------------------------------------------------
+  field                  SUPABASE (alias)                 DYNAMODB (canonical)            
+  ---------------------- -------------------------------- --------------------------------
+ ≠cuisine                Indian                           South Indian                    
+ ≠category               Side                             Main Course                     
+ ≠sub_category           Dairy                            Rice Dish                       
+ ≠cooking_method         Fermented                        Mixed and tempered              
+ ≠flavor_profile         Tangy, Mild, Cooling             Cooling, Tangy, Mildly Spiced, C
+ ≠texture                Smooth, creamy, thick            Soft, creamy, smooth            
+ ≠regional_variant                                        Tamil Nadu                      
+  veg_type               VEG                              VEG                             
+ ≠primary_ingredients    Milk, Starter Culture            Rice, Yogurt, Mustard Seeds, Cur
+
+  Supabase blob :  Curd. Indian side dairy dish. Made with Milk, Starter Culture. Fermented. Tangy, Mild, Cooling. Smooth, creamy, thick.
+  DynamoDB blob :  Curd. South Indian main course rice dish dish. Made with Rice, Yogurt, Mustard Seeds, Curry Leaves, Ginger, Green Chili. Mixed and tempered. Cooling, Tangy, Mildly Spiced, Comforting. Soft, creamy, smooth. Tamil Nadu style.
+
+============================================================================================
+[MISS]  Dal Makhani
+--------------------------------------------------------------------------------------------
+  field                  SUPABASE (alias)                 DYNAMODB (canonical)            
+  ---------------------- -------------------------------- --------------------------------
+  cuisine                North Indian                     North Indian                    
+  category               Main Course                      Main Course                     
+ ≠sub_category           Gravy                            Dal                             
+  cooking_method         Slow cooked gravy                Slow cooked gravy               
+  flavor_profile         Rich, Creamy, Earthy, Mildly Spi Rich, Creamy, Earthy, Mildly Spi
+ ≠texture                Smooth, thick, creamy gravy with Thick, velvety lentil stew      
+  regional_variant       Punjabi                          Punjabi                         
+  veg_type               VEG                              VEG                             
+ ≠primary_ingredients    Black Urad Dal, Kidney Beans, Bu Black Lentils, Kidney Beans, But
+
+  Supabase blob :  Dal Makhani. North Indian main course gravy dish. Made with Black Urad Dal, Kidney Beans, Butter, Cream, Tomato Puree, Spices. Slow cooked gravy. Rich, Creamy, Earthy, Mildly Spiced. Smooth, thick, creamy gravy with tender lentils. Punjabi style.
+  DynamoDB blob :  Dal Makhani. North Indian main course dal dish. Made with Black Lentils, Kidney Beans, Butter, Cream, Tomato Puree, Ginger-Garlic Paste. Slow cooked gravy. Rich, Creamy, Earthy, Mildly Spiced. Thick, velvety lentil stew. Punjabi style.
+
+============================================================================================
+[MISS]  Dal Tadka
+--------------------------------------------------------------------------------------------
+  field                  SUPABASE (alias)                 DYNAMODB (canonical)            
+  ---------------------- -------------------------------- --------------------------------
+  cuisine                North Indian                     North Indian                    
+  category               Main Course                      Main Course                     
+ ≠sub_category           Gravy                            Dal                             
+ ≠cooking_method         Boiled and tempered              Pressure cooked and tempered    
+  flavor_profile         Savory, Aromatic, Mildly Spiced, Savory, Aromatic, Mildly Spiced,
+ ≠texture                Smooth, soupy consistency with s Smooth, creamy lentil stew      
+ ≠regional_variant                                        Punjabi                         
+  veg_type               VEG                              VEG                             
+ ≠primary_ingredients    Toor Dal, Onion, Tomato, Ghee, C Toor Dal, Onions, Tomatoes, Ghee
+
+  Supabase blob :  Dal Tadka. North Indian main course gravy dish. Made with Toor Dal, Onion, Tomato, Ghee, Cumin Seeds, Garlic. Boiled and tempered. Savory, Aromatic, Mildly Spiced, Earthy. Smooth, soupy consistency with soft lentils.
+  DynamoDB blob :  Dal Tadka. North Indian main course dal dish. Made with Toor Dal, Onions, Tomatoes, Ghee, Cumin Seeds, Garlic. Pressure cooked and tempered. Savory, Aromatic, Mildly Spiced, Earthy. Smooth, creamy lentil stew. Punjabi style.
+
+============================================================================================
+[MISS]  Dosakaya Pachadi
+--------------------------------------------------------------------------------------------
+  field                  SUPABASE (alias)                 DYNAMODB (canonical)            
+  ---------------------- -------------------------------- --------------------------------
+ ≠cuisine                Andhra                           South Indian                    
+  category               Side                             Side                            
+ ≠sub_category           Condiment                        Chutney                         
+ ≠cooking_method         Roasted and ground               Ground and tempered             
+ ≠flavor_profile         Spicy, Tangy, Savory, Pungent    Tangy, Spicy, Savory, Fresh     
+ ≠texture                Coarse, rustic paste             Coarse, chunky paste            
+  regional_variant       Andhra                           Andhra                          
+  veg_type               VEG                              VEG                             
+ ≠primary_ingredients    Yellow Cucumber, Red Chillies, T Yellow Cucumber, Green Chili, Ta
+
+  Supabase blob :  Dosakaya Pachadi. Andhra side condiment dish. Made with Yellow Cucumber, Red Chillies, Tamarind, Garlic, Cumin Seeds, Oil. Roasted and ground. Spicy, Tangy, Savory, Pungent. Coarse, rustic paste. Andhra style.
+  DynamoDB blob :  Dosakaya Pachadi. South Indian side chutney dish. Made with Yellow Cucumber, Green Chili, Tamarind, Mustard Seeds, Curry Leaves, Garlic. Ground and tempered. Tangy, Spicy, Savory, Fresh. Coarse, chunky paste. Andhra style.
+
+============================================================================================
+[MISS]  Egg Manchurian
+--------------------------------------------------------------------------------------------
+  field                  SUPABASE (alias)                 DYNAMODB (canonical)            
+  ---------------------- -------------------------------- --------------------------------
+  cuisine                Indo-Chinese                     Indo-Chinese                    
+  category               Starter                          Starter                         
+ ≠sub_category           Gravy                            Dry                             
+ ≠cooking_method         Deep fried, then tossed in sauce Deep fried and stir-fried       
+ ≠flavor_profile         Tangy, Spicy, Sweet, Umami       Spicy, Tangy, Umami, Savory     
+ ≠texture                Crispy fried egg balls coated in Crispy exterior, soft interior w
+  regional_variant                                                                        
+ ≠veg_type               EGG                              NONVEG                          
+ ≠primary_ingredients    Boiled Eggs, Capsicum, Onion, So Boiled Egg, Bell Pepper, Onion, 
+
+  Supabase blob :  Egg Manchurian. Indo-Chinese starter gravy dish. Made with Boiled Eggs, Capsicum, Onion, Soy Sauce, Ginger, Garlic. Deep fried, then tossed in sauce. Tangy, Spicy, Sweet, Umami. Crispy fried egg balls coated in a thick, glossy sauce.
+  DynamoDB blob :  Egg Manchurian. Indo-Chinese starter dry dish. Made with Boiled Egg, Bell Pepper, Onion, Soy Sauce, Ginger, Garlic. Deep fried and stir-fried. Spicy, Tangy, Umami, Savory. Crispy exterior, soft interior with crunchy vegetables.
+
+============================================================================================
+[EMPTY]  Fruit Punch
+--------------------------------------------------------------------------------------------
+  field                  SUPABASE (alias)                 DYNAMODB (canonical)            
+  ---------------------- -------------------------------- --------------------------------
+ ≠cuisine                Global                           International                   
+  category               Beverage                         Beverage                        
+ ≠sub_category           Beverage                         Drink                           
+ ≠cooking_method         Mixed                            Blended, Chilled                
+ ≠flavor_profile         Sweet, Fruity, Refreshing, Tangy Sweet, Tangy, Refreshing, Fruity
+ ≠texture                Liquid with fruit pieces         Smooth liquid, sometimes with fr
+  regional_variant                                                                        
+  veg_type               VEG                              VEG                             
+ ≠primary_ingredients    Mixed Fruit Juices, Soda, Fresh  Mixed Fruits, Fruit Juices, Suga
+
+  Supabase blob :  Fruit Punch. Global beverage beverage dish. Made with Mixed Fruit Juices, Soda, Fresh Fruits, Sugar. Mixed. Sweet, Fruity, Refreshing, Tangy. Liquid with fruit pieces.
+  DynamoDB blob :  Fruit Punch. International beverage drink dish. Made with Mixed Fruits, Fruit Juices, Sugar, Water, Mint. Blended, Chilled. Sweet, Tangy, Refreshing, Fruity. Smooth liquid, sometimes with fruit pulp.
+
+============================================================================================
+[MISS]  Gobi Manchurian
+--------------------------------------------------------------------------------------------
+  field                  SUPABASE (alias)                 DYNAMODB (canonical)            
+  ---------------------- -------------------------------- --------------------------------
+  cuisine                Indo-Chinese                     Indo-Chinese                    
+  category               Starter                          Starter                         
+ ≠sub_category           Gravy                            Dry                             
+ ≠cooking_method         Deep fried, then tossed in sauce Deep fried, Tossed              
+ ≠flavor_profile         Tangy, Spicy, Sweet, Umami       Umami, Tangy, Mildly Spicy, Savo
+ ≠texture                Crispy fried cauliflower florets Crispy cauliflower florets in a 
+  regional_variant                                                                        
+  veg_type               VEG                              VEG                             
+ ≠primary_ingredients    Cauliflower, Capsicum, Onion, So Cauliflower, Soy Sauce, Ginger G
+
+  Supabase blob :  Gobi Manchurian. Indo-Chinese starter gravy dish. Made with Cauliflower, Capsicum, Onion, Soy Sauce, Ginger, Garlic. Deep fried, then tossed in sauce. Tangy, Spicy, Sweet, Umami. Crispy fried cauliflower florets coated in a thick, glossy sauce.
+  DynamoDB blob :  Gobi Manchurian. Indo-Chinese starter dry dish. Made with Cauliflower, Soy Sauce, Ginger Garlic Paste, Green Chillies, Spring Onion, Cornflour. Deep fried, Tossed. Umami, Tangy, Mildly Spicy, Savory. Crispy cauliflower florets in a glossy sauce.
+
+============================================================================================
+[MISS]  Hariyali Paneer Tikka
+--------------------------------------------------------------------------------------------
+  field                  SUPABASE (alias)                 DYNAMODB (canonical)            
+  ---------------------- -------------------------------- --------------------------------
+  cuisine                North Indian                     North Indian                    
+  category               Starter                          Starter                         
+ ≠sub_category           Snack                            Dry                             
+ ≠cooking_method         Tandoor baked or grilled         Tandoor baked                   
+ ≠flavor_profile         Herby, Mildly Spiced, Tangy, Smo Fresh, Herby, Mildly Spiced, Tan
+ ≠texture                Soft paneer cubes with a charred Soft paneer with slightly charre
+ ≠regional_variant                                        Punjabi                         
+  veg_type               VEG                              VEG                             
+ ≠primary_ingredients    Paneer, Coriander Leaves, Mint L Paneer, Mint, Coriander, Yogurt,
+
+  Supabase blob :  Hariyali Paneer Tikka. North Indian starter snack dish. Made with Paneer, Coriander Leaves, Mint Leaves, Green Chili, Yogurt, Spices. Tandoor baked or grilled. Herby, Mildly Spiced, Tangy, Smoky. Soft paneer cubes with a charred, flavorful exterior.
+  DynamoDB blob :  Hariyali Paneer Tikka. North Indian starter dry dish. Made with Paneer, Mint, Coriander, Yogurt, Green Chili, Ginger-Garlic Paste. Tandoor baked. Fresh, Herby, Mildly Spiced, Tangy. Soft paneer with slightly charred edges. Punjabi style.
+
+============================================================================================
+[MISS]  Masala Peanuts
+--------------------------------------------------------------------------------------------
+  field                  SUPABASE (alias)                 DYNAMODB (canonical)            
+  ---------------------- -------------------------------- --------------------------------
+  cuisine                Indian                           Indian                          
+ ≠category               Snack                            Starter                         
+ ≠sub_category           Dry                              Snack                           
+  cooking_method         Deep fried or roasted            Deep fried or roasted           
+ ≠flavor_profile         Spicy, Salty, Savory, Crunchy    Spicy, Salty, Crunchy, Savory   
+ ≠texture                Crisp, crunchy                   Crispy, crunchy                 
+  regional_variant                                                                        
+  veg_type               VEG                              VEG                             
+ ≠primary_ingredients    Peanuts, Gram Flour, Chilli Powd Peanuts, Gram Flour, Chili Powde
+
+  Supabase blob :  Masala Peanuts. Indian snack dry dish. Made with Peanuts, Gram Flour, Chilli Powder, Cumin Powder, Salt. Deep fried or roasted. Spicy, Salty, Savory, Crunchy. Crisp, crunchy.
+  DynamoDB blob :  Masala Peanuts. Indian starter snack dish. Made with Peanuts, Gram Flour, Chili Powder, Cumin Powder, Salt, Oil. Deep fried or roasted. Spicy, Salty, Crunchy, Savory. Crispy, crunchy.
+
+============================================================================================
+[EMPTY]  Meetha Paan
+--------------------------------------------------------------------------------------------
+  field                  SUPABASE (alias)                 DYNAMODB (canonical)            
+  ---------------------- -------------------------------- --------------------------------
+ ≠cuisine                Indian                           North Indian                    
+ ≠category               After-meal                       Dessert                         
+ ≠sub_category           Mouth Freshener                  Sweet                           
+  cooking_method         Assembled                        Assembled                       
+ ≠flavor_profile         Sweet, Aromatic, Refreshing, Min Sweet, Aromatic, Minty, Refreshi
+ ≠texture                Soft, chewy, juicy               Chewy, moist, with crunchy bits 
+ ≠regional_variant                                        Banarasi                        
+  veg_type               VEG                              VEG                             
+  primary_ingredients    Betel Leaf, Gulkand, Areca Nut,  Betel Leaf, Gulkand, Areca Nut, 
+
+  Supabase blob :  Meetha Paan. Indian after-meal mouth freshener dish. Made with Betel Leaf, Gulkand, Areca Nut, Fennel Seeds, Cardamom. Assembled. Sweet, Aromatic, Refreshing, Minty. Soft, chewy, juicy.
+  DynamoDB blob :  Meetha Paan. North Indian dessert sweet dish. Made with Betel Leaf, Gulkand, Areca Nut, Fennel Seeds, Cardamom, Sweetened Coconut. Assembled. Sweet, Aromatic, Minty, Refreshing. Chewy, moist, with crunchy bits. Banarasi style.
+
+============================================================================================
+[MISS]  Muffins
+--------------------------------------------------------------------------------------------
+  field                  SUPABASE (alias)                 DYNAMODB (canonical)            
+  ---------------------- -------------------------------- --------------------------------
+ ≠cuisine                Global                           Western                         
+  category               Dessert                          Dessert                         
+ ≠sub_category           Baked Good                       Sweet                           
+ ≠cooking_method         Oven baked                       Baked                           
+ ≠flavor_profile         Sweet, Mild, Moist               Sweet, Moist, Mild              
+ ≠texture                Soft, fluffy, moist crumb        Soft, fluffy, crumbly           
+  regional_variant                                                                        
+  veg_type               VEG                              VEG                             
+ ≠primary_ingredients    All-Purpose Flour, Sugar, Milk,  Flour, Sugar, Butter, Milk, Baki
+
+  Supabase blob :  Muffins. Global dessert baked good dish. Made with All-Purpose Flour, Sugar, Milk, Baking Powder, Oil. Oven baked. Sweet, Mild, Moist. Soft, fluffy, moist crumb.
+  DynamoDB blob :  Muffins. Western dessert sweet dish. Made with Flour, Sugar, Butter, Milk, Baking Powder, Flavoring. Baked. Sweet, Moist, Mild. Soft, fluffy, crumbly.
+
+============================================================================================
+[EMPTY]  Mutton Shami Kebab
+--------------------------------------------------------------------------------------------
+  field                  SUPABASE (alias)                 DYNAMODB (canonical)            
+  ---------------------- -------------------------------- --------------------------------
+  cuisine                Mughlai                          Mughlai                         
+  category               Starter                          Starter                         
+ ≠sub_category           Kebab                            Dry                             
+ ≠cooking_method         Pan-fried                        Pan fried                       
+  flavor_profile         Savory, Aromatic, Mildly Spiced, Savory, Aromatic, Mildly Spiced,
+ ≠texture                Soft, patty-like kebabs with a s Soft, melt-in-mouth patties with
+  regional_variant       Lucknowi                         Lucknowi                        
+  veg_type               NONVEG                           NONVEG                          
+ ≠primary_ingredients    Minced Mutton, Chana Dal, Onion, Minced Mutton, Chana Dal, Ginger
+
+  Supabase blob :  Mutton Shami Kebab. Mughlai starter kebab dish. Made with Minced Mutton, Chana Dal, Onion, Ginger, Garlic, Spices. Pan-fried. Savory, Aromatic, Mildly Spiced, Rich. Soft, patty-like kebabs with a slightly crisp exterior. Lucknowi style.
+  DynamoDB blob :  Mutton Shami Kebab. Mughlai starter dry dish. Made with Minced Mutton, Chana Dal, Ginger, Garlic, Green Chili, Whole Spices. Pan fried. Savory, Aromatic, Mildly Spiced, Rich. Soft, melt-in-mouth patties with a slightly crisp exterior. Lucknowi style.
+
+============================================================================================
+[MISS]  Mysore Bonda
+--------------------------------------------------------------------------------------------
+  field                  SUPABASE (alias)                 DYNAMODB (canonical)            
+  ---------------------- -------------------------------- --------------------------------
+  cuisine                South Indian                     South Indian                    
+ ≠category               Snack                            Starter                         
+ ≠sub_category           Fritter                          Snack                           
+  cooking_method         Deep fried                       Deep fried                      
+ ≠flavor_profile         Savory, Mildly Spiced, Tangy     Crispy, Savory, Mildly Spiced, T
+  texture                Crispy exterior, soft and fluffy Crispy exterior, soft and fluffy
+ ≠regional_variant       Andhra                           Karnataka                       
+  veg_type               VEG                              VEG                             
+ ≠primary_ingredients    Maida, Yogurt, Rice Flour, Onion Maida (All-purpose flour), Yogur
+
+  Supabase blob :  Mysore Bonda. South Indian snack fritter dish. Made with Maida, Yogurt, Rice Flour, Onion, Green Chili, Ginger. Deep fried. Savory, Mildly Spiced, Tangy. Crispy exterior, soft and fluffy interior. Andhra style.
+  DynamoDB blob :  Mysore Bonda. South Indian starter snack dish. Made with Maida (All-purpose flour), Yogurt, Green Chilies, Ginger, Cumin Seeds, Rice Flour. Deep fried. Crispy, Savory, Mildly Spiced, Tangy. Crispy exterior, soft and fluffy interior. Karnataka style.
+
+============================================================================================
+[MISS]  Osmania Biscuits
+--------------------------------------------------------------------------------------------
+  field                  SUPABASE (alias)                 DYNAMODB (canonical)            
+  ---------------------- -------------------------------- --------------------------------
+ ≠cuisine                Mughlai                          Indian                          
+ ≠category               Dessert                          Snack                           
+ ≠sub_category           Sweet                            Baked Good                      
+  cooking_method         Baked                            Baked                           
+ ≠flavor_profile         Sweet, Buttery, Mildly Spiced, R Mildly Sweet, Buttery, Aromatic 
+ ≠texture                Crumbly, melt-in-mouth           Crisp, crumbly, melt-in-mouth   
+  regional_variant       Hyderabadi                       Hyderabadi                      
+  veg_type               VEG                              VEG                             
+  primary_ingredients    Flour, Butter, Sugar, Milk, Card Flour, Butter, Sugar, Milk, Card
+
+  Supabase blob :  Osmania Biscuits. Mughlai dessert sweet dish. Made with Flour, Butter, Sugar, Milk, Cardamom. Baked. Sweet, Buttery, Mildly Spiced, Rich. Crumbly, melt-in-mouth. Hyderabadi style.
+  DynamoDB blob :  Osmania Biscuits. Indian snack baked good dish. Made with Flour, Butter, Sugar, Milk, Cardamom. Baked. Mildly Sweet, Buttery, Aromatic. Crisp, crumbly, melt-in-mouth. Hyderabadi style.
+
+============================================================================================
+[EMPTY]  Pachi Mirchi Kodi Kebab
+--------------------------------------------------------------------------------------------
+  field                  SUPABASE (alias)                 DYNAMODB (canonical)            
+  ---------------------- -------------------------------- --------------------------------
+  cuisine                South Indian                     South Indian                    
+  category               Starter                          Starter                         
+ ≠sub_category           Kebab                            Dry                             
+ ≠cooking_method         Grilled/Pan-fried                Grilled, Pan-fried              
+  flavor_profile         Spicy, Tangy, Aromatic, Savory   Spicy, Tangy, Aromatic, Savory  
+ ≠texture                Tender chicken, slightly charred Tender, juicy chicken pieces wit
+  regional_variant       Andhra                           Andhra                          
+  veg_type               NONVEG                           NONVEG                          
+ ≠primary_ingredients    Chicken, Green Chili, Ginger-Gar Chicken, Green Chillies, Ginger 
+
+  Supabase blob :  Pachi Mirchi Kodi Kebab. South Indian starter kebab dish. Made with Chicken, Green Chili, Ginger-Garlic Paste, Yogurt, Spices. Grilled/Pan-fried. Spicy, Tangy, Aromatic, Savory. Tender chicken, slightly charred exterior. Andhra style.
+  DynamoDB blob :  Pachi Mirchi Kodi Kebab. South Indian starter dry dish. Made with Chicken, Green Chillies, Ginger Garlic Paste, Yogurt, Spices, Lemon Juice. Grilled, Pan-fried. Spicy, Tangy, Aromatic, Savory. Tender, juicy chicken pieces with a charred exterior. Andhra style.
+
+============================================================================================
+[MISS]  Paneer 65
+--------------------------------------------------------------------------------------------
+  field                  SUPABASE (alias)                 DYNAMODB (canonical)            
+  ---------------------- -------------------------------- --------------------------------
+ ≠cuisine                South Indian                     Indo-Chinese                    
+  category               Starter                          Starter                         
+ ≠sub_category           Snack                            Dry                             
+  cooking_method         Deep fried and tossed            Deep fried and tossed           
+ ≠flavor_profile         Spicy, Tangy, Aromatic, Savory   Spicy, Tangy, Savory, Aromatic  
+ ≠texture                Crispy coating, soft paneer cube Crispy exterior, soft paneer int
+  regional_variant       Chennai                          Chennai                         
+  veg_type               VEG                              VEG                             
+ ≠primary_ingredients    Paneer, Curry Leaves, Ginger-Gar Paneer, Curry Leaves, Green Chil
+
+  Supabase blob :  Paneer 65. South Indian starter snack dish. Made with Paneer, Curry Leaves, Ginger-Garlic Paste, Chili Powder, Yogurt. Deep fried and tossed. Spicy, Tangy, Aromatic, Savory. Crispy coating, soft paneer cubes. Chennai style.
+  DynamoDB blob :  Paneer 65. Indo-Chinese starter dry dish. Made with Paneer, Curry Leaves, Green Chili, Ginger-Garlic Paste, Yogurt, Rice Flour. Deep fried and tossed. Spicy, Tangy, Savory, Aromatic. Crispy exterior, soft paneer interior. Chennai style.
+
+============================================================================================
+[EMPTY]  Paneer Manchurian
+--------------------------------------------------------------------------------------------
+  field                  SUPABASE (alias)                 DYNAMODB (canonical)            
+  ---------------------- -------------------------------- --------------------------------
+  cuisine                Indo-Chinese                     Indo-Chinese                    
+  category               Starter                          Starter                         
+ ≠sub_category           Dry/Gravy                        Dry                             
+  cooking_method         Deep fried, then stir-fried      Deep fried, then stir-fried     
+  flavor_profile         Spicy, Tangy, Umami, Savory      Spicy, Tangy, Umami, Savory     
+ ≠texture                Crispy paneer in a glossy sauce  Crispy paneer cubes in a thick, 
+  regional_variant                                                                        
+  veg_type               VEG                              VEG                             
+ ≠primary_ingredients    Paneer, Soy Sauce, Ginger-Garlic Paneer, Soy Sauce, Ginger, Garli
+
+  Supabase blob :  Paneer Manchurian. Indo-Chinese starter dry/gravy dish. Made with Paneer, Soy Sauce, Ginger-Garlic, Capsicum, Spring Onion. Deep fried, then stir-fried. Spicy, Tangy, Umami, Savory. Crispy paneer in a glossy sauce.
+  DynamoDB blob :  Paneer Manchurian. Indo-Chinese starter dry dish. Made with Paneer, Soy Sauce, Ginger, Garlic, Green Chilies, Cornflour. Deep fried, then stir-fried. Spicy, Tangy, Umami, Savory. Crispy paneer cubes in a thick, glossy sauce.
+
+============================================================================================
+[EMPTY]  Pappu Charu
+--------------------------------------------------------------------------------------------
+  field                  SUPABASE (alias)                 DYNAMODB (canonical)            
+  ---------------------- -------------------------------- --------------------------------
+  cuisine                South Indian                     South Indian                    
+  category               Side                             Side                            
+ ≠sub_category           Soup/Stew                        Gravy                           
+ ≠cooking_method         Boiled, then tempered            Simmered                        
+  flavor_profile         Tangy, Savory, Mildly Spiced, Ar Tangy, Savory, Mildly Spiced, Ar
+ ≠texture                Thin, watery lentil soup with so Thin, soupy lentil stew         
+  regional_variant       Andhra                           Andhra                          
+  veg_type               VEG                              VEG                             
+ ≠primary_ingredients    Lentils, Tamarind, Tomato, Green Toor Dal, Tamarind, Tomato, Gree
+
+  Supabase blob :  Pappu Charu. South Indian side soup/stew dish. Made with Lentils, Tamarind, Tomato, Green Chili, Mustard Seeds. Boiled, then tempered. Tangy, Savory, Mildly Spiced, Aromatic. Thin, watery lentil soup with soft vegetables. Andhra style.
+  DynamoDB blob :  Pappu Charu. South Indian side gravy dish. Made with Toor Dal, Tamarind, Tomato, Green Chillies, Spices, Curry Leaves. Simmered. Tangy, Savory, Mildly Spiced, Aromatic. Thin, soupy lentil stew. Andhra style.
+
+============================================================================================
+[EMPTY]  Peanut Chutney
+--------------------------------------------------------------------------------------------
+  field                  SUPABASE (alias)                 DYNAMODB (canonical)            
+  ---------------------- -------------------------------- --------------------------------
+  cuisine                South Indian                     South Indian                    
+  category               Side                             Side                            
+ ≠sub_category           Accompaniment                    Condiment                       
+ ≠cooking_method         Ground and tempered              Ground, Blended                 
+ ≠flavor_profile         Nutty, Spicy, Tangy, Savory      Nutty, Tangy, Spicy, Savory     
+ ≠texture                Coarse paste                     Thick, coarse paste             
+  regional_variant       Andhra                           Andhra                          
+  veg_type               VEG                              VEG                             
+ ≠primary_ingredients    Peanuts, Green Chili, Tamarind,  Peanuts, Tamarind, Red Chillies,
+
+  Supabase blob :  Peanut Chutney. South Indian side accompaniment dish. Made with Peanuts, Green Chili, Tamarind, Garlic, Curry Leaves. Ground and tempered. Nutty, Spicy, Tangy, Savory. Coarse paste. Andhra style.
+  DynamoDB blob :  Peanut Chutney. South Indian side condiment dish. Made with Peanuts, Tamarind, Red Chillies, Garlic, Cumin Seeds, Jaggery. Ground, Blended. Nutty, Tangy, Spicy, Savory. Thick, coarse paste. Andhra style.
+
+============================================================================================
+[MISS]  Salted Peanuts
+--------------------------------------------------------------------------------------------
+  field                  SUPABASE (alias)                 DYNAMODB (canonical)            
+  ---------------------- -------------------------------- --------------------------------
+ ≠cuisine                Global                           Indian                          
+ ≠category               Side                             Snack                           
+ ≠sub_category           Snack                            Dry Snack                       
+  cooking_method         Roasted or fried                 Roasted or fried                
+ ≠flavor_profile         Salty, Nutty, Earthy             Salty, Nutty, Crunchy           
+ ≠texture                Crunchy                          Crisp, crunchy                  
+  regional_variant                                                                        
+  veg_type               VEG                              VEG                             
+  primary_ingredients    Peanuts, Salt, Oil               Peanuts, Salt, Oil              
+
+  Supabase blob :  Salted Peanuts. Global side snack dish. Made with Peanuts, Salt, Oil. Roasted or fried. Salty, Nutty, Earthy. Crunchy.
+  DynamoDB blob :  Salted Peanuts. Indian snack dry snack dish. Made with Peanuts, Salt, Oil. Roasted or fried. Salty, Nutty, Crunchy. Crisp, crunchy.
+
+============================================================================================
+[EMPTY]  Seasonal Fruit Juice
+--------------------------------------------------------------------------------------------
+  field                  SUPABASE (alias)                 DYNAMODB (canonical)            
+  ---------------------- -------------------------------- --------------------------------
+ ≠cuisine                Global                           International                   
+  category               Beverage                         Beverage                        
+ ≠sub_category           Cold Drink                       Drink                           
+ ≠cooking_method         Blended                          Blended, Chilled                
+ ≠flavor_profile         Sweet, Tart, Refreshing, Fruity  Sweet, Refreshing, Fruity       
+ ≠texture                Smooth liquid, sometimes pulpy   Smooth liquid                   
+  regional_variant                                                                        
+  veg_type               VEG                              VEG                             
+  primary_ingredients    Seasonal Fruits, Water, Sugar    Seasonal Fruits, Water, Sugar   
+
+  Supabase blob :  Seasonal Fruit Juice. Global beverage cold drink dish. Made with Seasonal Fruits, Water, Sugar. Blended. Sweet, Tart, Refreshing, Fruity. Smooth liquid, sometimes pulpy.
+  DynamoDB blob :  Seasonal Fruit Juice. International beverage drink dish. Made with Seasonal Fruits, Water, Sugar. Blended, Chilled. Sweet, Refreshing, Fruity. Smooth liquid.
+
+============================================================================================
+[MISS]  Vankaya Pappu
+--------------------------------------------------------------------------------------------
+  field                  SUPABASE (alias)                 DYNAMODB (canonical)            
+  ---------------------- -------------------------------- --------------------------------
+  cuisine                South Indian                     South Indian                    
+  category               Main Course                      Main Course                     
+ ≠sub_category           Dal                              Gravy                           
+  cooking_method         Pressure cooked and tempered     Pressure cooked and tempered    
+ ≠flavor_profile         Savory, Mildly Spiced, Tangy, Co Savory, Mildly Tangy, Comforting
+ ≠texture                Smooth, creamy dal with soft bri Soft brinjal and dal in a semi-t
+  regional_variant       Andhra                           Andhra                          
+  veg_type               VEG                              VEG                             
+ ≠primary_ingredients    Brinjal, Toor Dal, Tamarind, Gre Brinjal, Toor Dal, Tamarind, Tom
+
+  Supabase blob :  Vankaya Pappu. South Indian main course dal dish. Made with Brinjal, Toor Dal, Tamarind, Green Chillies, Turmeric. Pressure cooked and tempered. Savory, Mildly Spiced, Tangy, Comforting. Smooth, creamy dal with soft brinjal pieces. Andhra style.
+  DynamoDB blob :  Vankaya Pappu. South Indian main course gravy dish. Made with Brinjal, Toor Dal, Tamarind, Tomato, Green Chili, Spices. Pressure cooked and tempered. Savory, Mildly Tangy, Comforting, Earthy. Soft brinjal and dal in a semi-thick consistency. Andhra style.
+
+============================================================================================
+[EMPTY]  Veg Alfredo Pasta
+--------------------------------------------------------------------------------------------
+  field                  SUPABASE (alias)                 DYNAMODB (canonical)            
+  ---------------------- -------------------------------- --------------------------------
+ ≠cuisine                Continental                      Italian                         
+  category               Main Course                      Main Course                     
+ ≠sub_category           Pasta                            Pasta Dish                      
+ ≠cooking_method         Pan-cooked                       Pan cooked                      
+ ≠flavor_profile         Rich, Creamy, Cheesy, Mildly Her Rich, Creamy, Savory, Cheesy    
+ ≠texture                Smooth, thick sauce coating al d Al dente pasta with tender veget
+  regional_variant                                                                        
+  veg_type               VEG                              VEG                             
+ ≠primary_ingredients    Pasta, Cream, Parmesan Cheese, B Pasta, Mixed Vegetables, Heavy C
+
+  Supabase blob :  Veg Alfredo Pasta. Continental main course pasta dish. Made with Pasta, Cream, Parmesan Cheese, Butter, Mixed Vegetables. Pan-cooked. Rich, Creamy, Cheesy, Mildly Herby. Smooth, thick sauce coating al dente pasta.
+  DynamoDB blob :  Veg Alfredo Pasta. Italian main course pasta dish dish. Made with Pasta, Mixed Vegetables, Heavy Cream, Parmesan Cheese, Garlic, Butter. Pan cooked. Rich, Creamy, Savory, Cheesy. Al dente pasta with tender vegetables in a thick sauce.
+
+============================================================================================
+[MISS]  Veg Burger
+--------------------------------------------------------------------------------------------
+  field                  SUPABASE (alias)                 DYNAMODB (canonical)            
+  ---------------------- -------------------------------- --------------------------------
+ ≠cuisine                Western                          Indo-Western                    
+  category               Main Course                      Main Course                     
+ ≠sub_category           Sandwich                         Snack                           
+ ≠cooking_method         Pan fried patty, assembled       Pan-fried patty, Assembled      
+ ≠flavor_profile         Savory, Tangy, Mildly Spiced, Fr Savory, Mildly Spiced, Tangy, Cr
+ ≠texture                Soft bun with a crispy patty and Soft bun with crisp vegetables a
+  regional_variant                                                                        
+  veg_type               VEG                              VEG                             
+ ≠primary_ingredients    Vegetable Patty, Bun, Lettuce, T Vegetable Patty, Burger Bun, Let
+
+  Supabase blob :  Veg Burger. Western main course sandwich dish. Made with Vegetable Patty, Bun, Lettuce, Tomato, Cheese, Sauce. Pan fried patty, assembled. Savory, Tangy, Mildly Spiced, Fresh. Soft bun with a crispy patty and fresh vegetables.
+  DynamoDB blob :  VEG Burger. Indo-Western main course snack dish. Made with Vegetable Patty, Burger Bun, Lettuce, Tomato, Mayonnaise, Cheese. Pan-fried patty, Assembled. Savory, Mildly Spiced, Tangy, Creamy. Soft bun with crisp vegetables and a firm patty.
+
+============================================================================================
+[MISS]  Veg Puff
+--------------------------------------------------------------------------------------------
+  field                  SUPABASE (alias)                 DYNAMODB (canonical)            
+  ---------------------- -------------------------------- --------------------------------
+  cuisine                Indian                           Indian                          
+ ≠category               Starter                          Snack                           
+ ≠sub_category           Snack                            Baked Snack                     
+  cooking_method         Baked                            Baked                           
+ ≠flavor_profile         Savory, Mildly Spiced, Flaky, Bu Savory, Mildly Spiced, Flaky    
+ ≠texture                Flaky, buttery pastry with a sof Crispy, flaky pastry with soft, 
+  regional_variant                                                                        
+  veg_type               VEG                              VEG                             
+  primary_ingredients    Puff Pastry, Mixed Vegetables, P Puff Pastry, Mixed Vegetables, P
+
+  Supabase blob :  Veg Puff. Indian starter snack dish. Made with Puff Pastry, Mixed Vegetables, Potatoes, Peas, Spices. Baked. Savory, Mildly Spiced, Flaky, Buttery. Flaky, buttery pastry with a soft, spiced vegetable filling.
+  DynamoDB blob :  Veg Puff. Indian snack baked snack dish. Made with Puff Pastry, Mixed Vegetables, Potatoes, Peas, Spices. Baked. Savory, Mildly Spiced, Flaky. Crispy, flaky pastry with soft, spiced filling.
+
+============================================================================================
+[EMPTY]  Veg Soft Noodles
+--------------------------------------------------------------------------------------------
+  field                  SUPABASE (alias)                 DYNAMODB (canonical)            
+  ---------------------- -------------------------------- --------------------------------
+  cuisine                Indo-Chinese                     Indo-Chinese                    
+  category               Main Course                      Main Course                     
+ ≠sub_category           Noodles                          Noodle Dish                     
+  cooking_method         Stir-fried                       Stir-fried                      
+ ≠flavor_profile         Savory, Umami, Mildly Spiced, Ta Savory, Umami, Mildly Spicy, Tan
+ ≠texture                Soft, slippery noodles with cris Soft noodles with crunchy vegeta
+  regional_variant                                                                        
+  veg_type               VEG                              VEG                             
+  primary_ingredients    Noodles, Mixed Vegetables, Soy S Noodles, Mixed Vegetables, Soy S
+
+  Supabase blob :  Veg Soft Noodles. Indo-Chinese main course noodles dish. Made with Noodles, Mixed Vegetables, Soy Sauce, Vinegar, Ginger, Garlic. Stir-fried. Savory, Umami, Mildly Spiced, Tangy. Soft, slippery noodles with crisp-tender vegetables.
+  DynamoDB blob :  Veg Soft Noodles. Indo-Chinese main course noodle dish dish. Made with Noodles, Mixed Vegetables, Soy Sauce, Vinegar, Ginger Garlic Paste, Schezwan Sauce. Stir-fried. Savory, Umami, Mildly Spicy, Tangy. Soft noodles with crunchy vegetables.
+
+============================================================================================
+[MISS]  Veg Wrap
+--------------------------------------------------------------------------------------------
+  field                  SUPABASE (alias)                 DYNAMODB (canonical)            
+  ---------------------- -------------------------------- --------------------------------
+ ≠cuisine                Indian                           Indian Fusion                   
+ ≠category               Starter                          Main Course                     
+ ≠sub_category           Wrap                             Snack                           
+ ≠cooking_method         Pan-cooked and assembled         Pan-fried/Grilled, Wrapped      
+ ≠flavor_profile         Savory, Mildly Spiced, Fresh, Ta Fresh, Savory, Mildly Spiced, Ta
+ ≠texture                Soft flatbread with a crunchy, f Soft wrap with crunchy vegetable
+  regional_variant                                                                        
+  veg_type               VEG                              VEG                             
+ ≠primary_ingredients    Flatbread, Mixed Vegetables, Pan Mixed Vegetables, Flatbread, Pan
+
+  Supabase blob :  Veg Wrap. Indian starter wrap dish. Made with Flatbread, Mixed Vegetables, Paneer, Chutney, Spices. Pan-cooked and assembled. Savory, Mildly Spiced, Fresh, Tangy. Soft flatbread with a crunchy, flavorful filling.
+  DynamoDB blob :  Veg Wrap. Indian Fusion main course snack dish. Made with Mixed Vegetables, Flatbread, Paneer, Sauces, Spices. Pan-fried/Grilled, Wrapped. Fresh, Savory, Mildly Spiced, Tangy. Soft wrap with crunchy vegetable filling.
+

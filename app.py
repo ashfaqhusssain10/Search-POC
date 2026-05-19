@@ -1,13 +1,9 @@
 """Streamlit UI for Item-Based Platter Search POC.
 
-Currently using `search_v4` — pure item-to-item similarity, no platter ranking.
-Each selected dish gets its own top-5 closest canonical matches.
-
-To revert to platter-based search:
-    1. Swap the import below to `search_v3` (PM-spec) or `search_v2`
-       (re-embed at query time)
-    2. Uncomment the platter-rendering block at the bottom of this file
-    3. Comment out the v4 rendering block currently active
+Two views, toggled by a radio at the top:
+  - "Item matches" : v4 — per-dish top-5 canonical similarity (debug view)
+  - "Platters"     : v5 — platters ranked by how well they cover the user's
+                     selection (coverage + match quality + specificity)
 """
 
 import os
@@ -16,6 +12,7 @@ import streamlit as st
 
 from core.connections import neo4j_session
 from scripts.search_v4 import ItemQueryResult, search_items_v4
+from scripts.search_v5 import PlatterResultV5, search_platters_v5
 
 # ── Older paths (kept for easy revert) ──────────────────────────────────────
 # from scripts.search import PlatterResult, search_platters             # v1: community-based
@@ -66,8 +63,8 @@ def load_canonical_items() -> list[str]:
 # UI
 # ---------------------------------------------------------------------------
 
-st.title("Item Similarity Search")
-st.caption("Select dishes — each one shows its top-5 closest matches in the catalogue.")
+st.title("Platter Search")
+st.caption("Select dishes — choose a view: per-dish matches, or platters that cover your selection.")
 
 canonical_items = load_canonical_items()
 
@@ -77,43 +74,95 @@ selected = st.multiselect(
     placeholder="Type to search and select dishes...",
 )
 
+view = st.radio(
+    "View",
+    options=["Platters", "Item matches"],
+    horizontal=True,
+    help="Platters: ranked menus that cover your selection. Item matches: per-dish top-5 canonical similarity.",
+)
+
 search_clicked = st.button("Search", type="primary", disabled=not selected)
 
+
 # ---------------------------------------------------------------------------
-# Results (v4: pure item-to-item, no platter logic)
+# Results
 # ---------------------------------------------------------------------------
 
 if search_clicked and selected:
-    with st.spinner("Searching..."):
-        results: list[ItemQueryResult] = search_items_v4(selected, top_k=5)
+    if view == "Item matches":
+        with st.spinner("Searching..."):
+            results: list[ItemQueryResult] = search_items_v4(selected, top_k=5)
 
-    if not results:
-        st.warning("No matches found.")
+        if not results:
+            st.warning("No matches found.")
+        else:
+            for r in results:
+                veg_badge = (
+                    "🟢 VEG" if r.veg_type == "VEG"
+                    else "🔴 NON-VEG" if r.veg_type == "NONVEG"
+                    else "🟡 EGG" if r.veg_type == "EGG"
+                    else ""
+                )
+                header = f"**{r.query_item}**  {veg_badge}"
+                with st.expander(header, expanded=True):
+                    if r.query_embedding_text:
+                        st.caption("**Query embedding text**")
+                        st.code(r.query_embedding_text, language=None)
+                    if not r.hits:
+                        st.warning("No hits returned for this item.")
+                        continue
+                    for rank, h in enumerate(r.hits, 1):
+                        meta_bits = [b for b in (h.veg_type, h.form, h.category) if b]
+                        meta_suffix = f" _( {' · '.join(meta_bits)} )_" if meta_bits else ""
+                        st.write(
+                            f"**#{rank}**  `{h.score:.3f}`  **{h.name}**{meta_suffix}"
+                        )
+                        if h.embedding_text:
+                            st.code(h.embedding_text, language=None)
     else:
-        for r in results:
-            veg_badge = (
-                "🟢 VEG" if r.veg_type == "VEG"
-                else "🔴 NON-VEG" if r.veg_type == "NONVEG"
-                else "🟡 EGG" if r.veg_type == "EGG"
-                else ""
-            )
-            header = f"**{r.query_item}**  {veg_badge}"
+        with st.spinner("Finding platters..."):
+            platters: list[PlatterResultV5] = search_platters_v5(selected, top_k_per_item=5, top_n=10)
 
-            with st.expander(header, expanded=True):
-                if r.query_embedding_text:
-                    st.caption("**Query embedding text**")
-                    st.code(r.query_embedding_text, language=None)
-                if not r.hits:
-                    st.warning("No hits returned for this item.")
-                    continue
-                for rank, h in enumerate(r.hits, 1):
-                    meta_bits = [b for b in (h.veg_type, h.form, h.category) if b]
-                    meta_suffix = f" _( {' · '.join(meta_bits)} )_" if meta_bits else ""
-                    st.write(
-                        f"**#{rank}**  `{h.score:.3f}`  **{h.name}**{meta_suffix}"
-                    )
-                    if h.embedding_text:
-                        st.code(h.embedding_text, language=None)
+        if not platters:
+            st.warning("No matching platters found.")
+        else:
+            st.subheader(f"Top {len(platters)} platters")
+            for i, p in enumerate(platters, 1):
+                veg_badge = "🟢 VEG" if p.veg is True else "🔴 NON-VEG" if p.veg is False else ""
+                price = f"₹{int(p.min_price)}" if p.min_price else "—"
+                meal_label = ", ".join(p.meal_type) if isinstance(p.meal_type, list) else (p.meal_type or "")
+                type_suffix = " · ".join(b for b in (p.platter_type or "", meal_label) if b)
+                header = (
+                    f"#{i}  **{p.name}**  —  {p.matched_count}/{p.total_query_dishes} dishes  ·  "
+                    f"score {p.final_score:.2f}  |  {veg_badge}  {price}"
+                )
+                with st.expander(header, expanded=(i == 1)):
+                    c1, c2, c3, c4 = st.columns(4)
+                    c1.metric("Coverage", f"{p.coverage:.0%}")
+                    c2.metric("Avg quality", f"{p.quality:.2f}")
+                    c3.metric("Specificity", f"{p.specificity:.0%}",
+                              help="Fraction of platter's items that match your selection — higher = more focused.")
+                    c4.metric("Items in platter", len(p.all_items))
+                    if type_suffix:
+                        st.caption(type_suffix)
+                    st.progress(p.coverage)
+                    st.markdown("**Your dishes:**")
+                    for m in p.dish_matches:
+                        if m.matched_canonical:
+                            if m.matched_canonical.lower() == m.query_item.lower():
+                                st.write(f"✅ **{m.query_item}** _(score {m.score:.2f})_")
+                            else:
+                                st.write(
+                                    f"✅ **{m.query_item}** → **{m.matched_canonical}** "
+                                    f"_(score {m.score:.2f})_"
+                                )
+                        else:
+                            st.write(f"❌ **{m.query_item}** — not in this platter")
+                    if p.all_items:
+                        st.markdown("**All items in this platter:**")
+                        cols = st.columns(3)
+                        for idx, name in enumerate(sorted(p.all_items)):
+                            cols[idx % 3].write(f"• {name}")
 
 
 # ---------------------------------------------------------------------------

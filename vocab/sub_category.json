@@ -1,0 +1,125 @@
+{
+  "Dry Dish": [
+    "Dry",
+    "Dry Vegetable"
+  ],
+  "Snack": [
+    "Snack",
+    "Fried Snack",
+    "Dry Snack",
+    "Baked Snack",
+    "Sweet Snack",
+    "Fritter",
+    "Savory"
+  ],
+  "Gravy Dish": [
+    "Gravy"
+  ],
+  "Rice Dish": [
+    "Rice Dish",
+    "Biryani",
+    "Plain Rice",
+    "One-pot Meal",
+    "Staple"
+  ],
+  "Sweet Dish": [
+    "Sweet",
+    "Cake",
+    "Frozen Dessert",
+    "Pudding",
+    "Fruit Dessert",
+    "Pastry",
+    "Sweet Flatbread",
+    "Flatbread/Sweet",
+    "Steamed Cake",
+    "Sweetener"
+  ],
+  "Condiment": [
+    "Condiment",
+    "Chutney",
+    "Dip",
+    "Accompaniment",
+    "Spice Powder",
+    "Spread",
+    "Paste/Dip",
+    "Sauce",
+    "Puree",
+    "Side"
+  ],
+  "Beverage": [
+    "Drink",
+    "Juice",
+    "Hot Beverage",
+    "Cold Drink",
+    "Cold Beverage",
+    "Beverage",
+    "Mocktail",
+    "Hot Drink",
+    "Malted Drink",
+    "Milkshake",
+    "Health Drink",
+    "Yogurt Drink"
+  ],
+  "Flatbread": [
+    "Flatbread",
+    "Fried Bread",
+    "Bread"
+  ],
+  "Pasta & Noodles": [
+    "Pasta",
+    "Noodles",
+    "Noodle Dish",
+    "Pasta Dish"
+  ],
+  "Soup": [
+    "Soup",
+    "Soup/Stew",
+    "Broth"
+  ],
+  "Sandwich & Wrap": [
+    "Sandwich",
+    "Toast",
+    "Wrap"
+  ],
+  "Baked Good": [
+    "Baked Good",
+    "Baked Dish"
+  ],
+  "Salad": [
+    "Salad",
+    "Fruit Salad",
+    "Cold Salad",
+    "Green Salad"
+  ],
+  "Kebab": [
+    "Kebab",
+    "Tikka"
+  ],
+  "Fruit": [
+    "Fruit"
+  ],
+  "Dal": [
+    "Dal",
+    "Lentil Stew"
+  ],
+  "Dairy Dish": [
+    "Dairy",
+    "Yogurt Dish"
+  ],
+  "Main Dish": [
+    "Dry/Gravy",
+    "Simple Meal",
+    "Protein",
+    "Whole Food",
+    "Meat"
+  ],
+  "Mouth Freshener": [
+    "Mouth Freshener"
+  ],
+  "Pizza": [
+    "Pizza"
+  ],
+  "Egg Dish": [
+    "Egg Dish"
+  ]
+}

@@ -1,0 +1,68 @@
+{
+  "Indian Regional": [
+    "North Indian",
+    "South Indian",
+    "Mughlai",
+    "Hyderabadi",
+    "Andhra",
+    "Kashmiri",
+    "Maharashtrian",
+    "Coastal Indian",
+    "Gujarati",
+    "Western Indian",
+    "Central Indian",
+    "East Indian"
+  ],
+  "Fusion": [
+    "Indo-Chinese",
+    "Indo-Western",
+    "Indian Fusion",
+    "Indo-Continental",
+    "Indo-Japanese",
+    "Fusion"
+  ],
+  "Indian": [
+    "Indian",
+    "Indian Street Food"
+  ],
+  "Western": [
+    "Continental",
+    "Western",
+    "Italian",
+    "European",
+    "French",
+    "American"
+  ],
+  "Global": [
+    "Global",
+    "International"
+  ],
+  "Bakery": [
+    "Bakery",
+    "Indian Bakery"
+  ],
+  "Middle Eastern": [
+    "Middle Eastern"
+  ],
+  "Beverage": [
+    "Beverage"
+  ],
+  "Asian": [
+    "Thai",
+    "Japanese",
+    "Tibetan/Nepalese"
+  ],
+  "Latin American": [
+    "Mexican",
+    "Latin American"
+  ],
+  "Dessert": [
+    "Dessert"
+  ],
+  "Snack": [
+    "Snack"
+  ],
+  "Unspecified": [
+    "N/A"
+  ]
+}
