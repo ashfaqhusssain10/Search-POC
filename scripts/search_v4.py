@@ -30,7 +30,27 @@ log = logging.getLogger(__name__)
 ALIAS_COLLECTION = "searchpoc_aliases"
 CANONICAL_COLLECTION = "searchpoc_canonicals"
 DEFAULT_TOP_K = 5
-ITEM_SCORE_THRESHOLD = 0.0  # show all hits; let UI decide cutoffs
+
+# Display floor: hits below this score are never surfaced to the user. Grounded
+# in diagnostics/search_quality.csv analysis — below 0.80 matches start losing
+# dish identity and feel like generic category fallbacks ("any curry", "any
+# biscuit"). The pipeline-level QDRANT_SCORE_THRESHOLD (~0.35) is still
+# appropriate for ETL retrieval; this is the UI-display floor.
+ITEM_SCORE_THRESHOLD = 0.80
+
+# Two-tier quality labels for UI rendering. Hits below the Good lower bound are
+# already filtered out by ITEM_SCORE_THRESHOLD.
+QUALITY_EXCELLENT_MIN = 0.90
+QUALITY_GOOD_MIN = 0.80
+
+
+def quality_tier(score: float) -> str:
+    """Return the quality tier label for a similarity score."""
+    if score >= QUALITY_EXCELLENT_MIN:
+        return "Excellent"
+    if score >= QUALITY_GOOD_MIN:
+        return "Good"
+    return "Hidden"
 
 
 # ---------------------------------------------------------------------------
@@ -45,6 +65,7 @@ class ItemHit:
     form: str | None
     category: str | None
     embedding_text: str | None = None
+    tier: str = "Hidden"
 
 
 @dataclass
@@ -234,6 +255,7 @@ def search_items_v4(items: list[str], top_k: int = DEFAULT_TOP_K) -> list[ItemQu
                     name=h.payload.get("name", ""),
                     llm_description=canonical_descs.get(h.payload.get("name", "")),
                 ),
+                tier=quality_tier(float(h.score)),
             )
             for h in hits_raw if h.payload.get("name")
         ]

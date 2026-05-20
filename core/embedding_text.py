@@ -70,7 +70,11 @@ def build_item_embedding_text(
         if b
     ]
     if header_bits:
-        parts.append(f"{' '.join(header_bits)} dish.")
+        header = " ".join(header_bits)
+        # Closed-vocab sub_category labels like "Sweet Dish"/"Rice Dish" already
+        # end in "dish"; skip the suffix to avoid "sweet dish dish".
+        suffix = "" if header.endswith("dish") else " dish"
+        parts.append(f"{header}{suffix}.")
 
     if ingredients:
         parts.append(f"Made with {ingredients}.")

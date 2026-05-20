@@ -35,6 +35,14 @@ log = logging.getLogger(__name__)
 DEFAULT_TOP_K_PER_ITEM = 5    # canonical hits to consider per user dish
 DEFAULT_TOP_N_PLATTERS = 10
 
+# Map of UI-friendly service type labels → the raw Platter.type values stored
+# in Neo4j. Used by the multiselect filter in app.py.
+SERVICE_TYPE_LABELS: dict[str, str] = {
+    "Delivery Box": "DELIVERYBOX",
+    "Meal Box": "MEALBOX",
+    "Snack Box": "SNACKBOX",
+}
+
 # Scoring weights. Coverage is the dominant signal — we want platters that
 # cover all the user's dishes. Quality (avg similarity of matches) discriminates
 # between candidates with equal coverage. Specificity (= what fraction of the
@@ -58,6 +66,13 @@ class DishMatch:
 
 
 @dataclass
+class SkeletonSlot:
+    family: str
+    slot_count: int
+    order: int
+
+
+@dataclass
 class PlatterResultV5:
     platter_id: str
     name: str
@@ -67,11 +82,13 @@ class PlatterResultV5:
     min_price: float | None
     coverage: float           # 0.0 - 1.0
     quality: float            # 0.0 - 1.0  (avg sim score of matched dishes)
-    specificity: float        # matched_items / total_platter_items
+    specificity: float        # matched_items / intended_slot_count
+    intended_slot_count: int  # sum of PlatterCategory.items_limit
     final_score: float        # weighted blend
     matched_count: int
     total_query_dishes: int
     dish_matches: list[DishMatch]
+    skeleton: list[SkeletonSlot] = field(default_factory=list)
     all_items: list[str] = field(default_factory=list)
 
 
@@ -82,9 +99,17 @@ class PlatterResultV5:
 FETCH_PLATTERS_QUERY = """
 MATCH (p:Platter)-[:CONTAINS]->(i:Item)
 WHERE i.name IN $canonical_names
+  AND ($service_types IS NULL OR p.type IN $service_types)
 WITH p, collect(DISTINCT i.name) AS matched_items
-MATCH (p)-[:CONTAINS]->(all:Item)
-WITH p, matched_items, collect(DISTINCT all.name) AS all_items
+MATCH (p)-[:CONTAINS]->(all_item:Item)
+WITH p, matched_items, collect(DISTINCT all_item.name) AS all_items
+OPTIONAL MATCH (p)-[:HAS_CATEGORY]->(pc:PlatterCategory)
+WITH p, matched_items, all_items,
+     collect(DISTINCT {
+       family: coalesce(pc.category_family, pc.category_name_raw, 'Other'),
+       slot_count: coalesce(pc.items_limit, 0),
+       order: coalesce(pc.category_order, 999)
+     }) AS skeleton_raw
 RETURN p.id AS id,
        p.name AS name,
        p.type AS platter_type,
@@ -92,7 +117,8 @@ RETURN p.id AS id,
        p.veg AS veg,
        p.minPrice AS min_price,
        matched_items,
-       all_items
+       all_items,
+       skeleton_raw
 """
 
 
@@ -104,6 +130,7 @@ def search_platters_v5(
     items: list[str],
     top_k_per_item: int = DEFAULT_TOP_K_PER_ITEM,
     top_n: int = DEFAULT_TOP_N_PLATTERS,
+    service_types: list[str] | None = None,
 ) -> list[PlatterResultV5]:
     """Find platters that best cover the user's dish selection.
 
@@ -136,8 +163,14 @@ def search_platters_v5(
              len(candidate_canonicals), len(items))
 
     # ── 2. Pull every platter that contains any candidate canonical ───────
+    # `service_types` is passed as None when the user wants no filter — the
+    # Cypher uses a null-aware predicate so a single query handles both cases.
     with neo4j_session() as session:
-        rows = list(session.run(FETCH_PLATTERS_QUERY, canonical_names=candidate_canonicals))
+        rows = list(session.run(
+            FETCH_PLATTERS_QUERY,
+            canonical_names=candidate_canonicals,
+            service_types=service_types if service_types else None,
+        ))
     log.info("Found %d candidate platters", len(rows))
 
     # ── 3. Score each platter ─────────────────────────────────────────────
@@ -164,8 +197,28 @@ def search_platters_v5(
         matched_count = len(match_scores)
         coverage = matched_count / n_dishes
         quality = sum(match_scores) / matched_count if match_scores else 0.0
-        total_platter_items = len(row["all_items"]) or 1
-        specificity = matched_count / total_platter_items
+
+        # Build the platter's category skeleton from PlatterCategory edges.
+        # Aggregate slot counts per family (the same family can appear under
+        # multiple PlatterCategory nodes — e.g. premium + standard slots).
+        family_totals: dict[str, tuple[int, int]] = {}  # family → (slot_count, min_order)
+        for entry in row["skeleton_raw"] or []:
+            family = entry.get("family") or "Other"
+            slot_count = int(entry.get("slot_count") or 0)
+            order = int(entry.get("order") or 999)
+            existing_count, existing_order = family_totals.get(family, (0, 999))
+            family_totals[family] = (existing_count + slot_count, min(existing_order, order))
+        skeleton = [
+            SkeletonSlot(family=fam, slot_count=count, order=order)
+            for fam, (count, order) in sorted(family_totals.items(), key=lambda kv: kv[1][1])
+            if count > 0
+        ]
+
+        intended_slot_count = sum(s.slot_count for s in skeleton)
+        # If a platter somehow has no skeleton data, fall back to all_items count
+        # so we don't divide by zero — covers stragglers in legacy data.
+        denominator = intended_slot_count or (len(row["all_items"]) or 1)
+        specificity = min(matched_count / denominator, 1.0)
         final_score = (
             COVERAGE_WEIGHT * coverage
             + QUALITY_WEIGHT * quality
@@ -182,10 +235,12 @@ def search_platters_v5(
             coverage=coverage,
             quality=quality,
             specificity=specificity,
+            intended_slot_count=intended_slot_count,
             final_score=final_score,
             matched_count=matched_count,
             total_query_dishes=n_dishes,
             dish_matches=dish_matches,
+            skeleton=skeleton,
             all_items=row["all_items"],
         ))
 
@@ -221,9 +276,13 @@ if __name__ == "__main__":
         type_suffix = f"  ({type_bits})" if type_bits else ""
         log.info("")
         log.info("#%d  %s%s%s", i, r.name, type_suffix, price)
-        log.info("    coverage=%.0f%% (%d/%d)  quality=%.3f  specificity=%.2f  score=%.3f",
+        log.info("    coverage=%.0f%% (%d/%d)  quality=%.3f  specificity=%.0f%% (%d/%d slots)  score=%.3f",
                  100 * r.coverage, r.matched_count, r.total_query_dishes,
-                 r.quality, r.specificity, r.final_score)
+                 r.quality, 100 * r.specificity, r.matched_count, r.intended_slot_count,
+                 r.final_score)
+        if r.skeleton:
+            log.info("    skeleton: %s",
+                     " · ".join(f"{s.slot_count} {s.family}" for s in r.skeleton))
         for m in r.dish_matches:
             if m.matched_canonical:
                 arrow = (

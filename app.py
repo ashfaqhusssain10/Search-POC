@@ -12,7 +12,11 @@ import streamlit as st
 
 from core.connections import neo4j_session
 from scripts.search_v4 import ItemQueryResult, search_items_v4
-from scripts.search_v5 import PlatterResultV5, search_platters_v5
+from scripts.search_v5 import (
+    SERVICE_TYPE_LABELS,
+    PlatterResultV5,
+    search_platters_v5,
+)
 
 # ── Older paths (kept for easy revert) ──────────────────────────────────────
 # from scripts.search import PlatterResult, search_platters             # v1: community-based
@@ -81,6 +85,15 @@ view = st.radio(
     help="Platters: ranked menus that cover your selection. Item matches: per-dish top-5 canonical similarity.",
 )
 
+selected_service_labels: list[str] = []
+if view == "Platters":
+    selected_service_labels = st.multiselect(
+        label="Service type",
+        options=list(SERVICE_TYPE_LABELS.keys()),
+        default=list(SERVICE_TYPE_LABELS.keys()),
+        help="Restrict results to specific platter service types. Clear all to include every type.",
+    )
+
 search_clicked = st.button("Search", type="primary", disabled=not selected)
 
 
@@ -114,14 +127,19 @@ if search_clicked and selected:
                     for rank, h in enumerate(r.hits, 1):
                         meta_bits = [b for b in (h.veg_type, h.form, h.category) if b]
                         meta_suffix = f" _( {' · '.join(meta_bits)} )_" if meta_bits else ""
+                        tier_badge = "🟩 Excellent" if h.tier == "Excellent" else "🟦 Good"
                         st.write(
-                            f"**#{rank}**  `{h.score:.3f}`  **{h.name}**{meta_suffix}"
+                            f"**#{rank}**  {tier_badge} `{h.score:.3f}`  **{h.name}**{meta_suffix}"
                         )
                         if h.embedding_text:
                             st.code(h.embedding_text, language=None)
     else:
+        service_types = [SERVICE_TYPE_LABELS[label] for label in selected_service_labels]
         with st.spinner("Finding platters..."):
-            platters: list[PlatterResultV5] = search_platters_v5(selected, top_k_per_item=5, top_n=10)
+            platters: list[PlatterResultV5] = search_platters_v5(
+                selected, top_k_per_item=5, top_n=10,
+                service_types=service_types or None,
+            )
 
         if not platters:
             st.warning("No matching platters found.")
@@ -141,10 +159,15 @@ if search_clicked and selected:
                     c1.metric("Coverage", f"{p.coverage:.0%}")
                     c2.metric("Avg quality", f"{p.quality:.2f}")
                     c3.metric("Specificity", f"{p.specificity:.0%}",
-                              help="Fraction of platter's items that match your selection — higher = more focused.")
-                    c4.metric("Items in platter", len(p.all_items))
+                              help="Fraction of the platter's intended slots filled by your selection.")
+                    c4.metric("Intended slots", p.intended_slot_count or len(p.all_items))
                     if type_suffix:
                         st.caption(type_suffix)
+                    if p.skeleton:
+                        skeleton_str = " · ".join(
+                            f"**{s.slot_count}** {s.family}" for s in p.skeleton
+                        )
+                        st.markdown(f"**Platter skeleton:** {skeleton_str}")
                     st.progress(p.coverage)
                     st.markdown("**Your dishes:**")
                     for m in p.dish_matches:
