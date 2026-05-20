@@ -86,12 +86,23 @@ view = st.radio(
 )
 
 selected_service_labels: list[str] = []
+ranker_choice = "current"
 if view == "Platters":
     selected_service_labels = st.multiselect(
         label="Service type",
         options=list(SERVICE_TYPE_LABELS.keys()),
         default=list(SERVICE_TYPE_LABELS.keys()),
         help="Restrict results to specific platter service types. Clear all to include every type.",
+    )
+    ranker_choice = st.radio(
+        "Ranker",
+        options=["current", "coverage_dominant"],
+        format_func=lambda v: {
+            "current": "Current (0.55 / 0.30 / 0.15, floor 0.80)",
+            "coverage_dominant": "Coverage-dominant (0.70 / 0.20 / 0.10, floor 0.65)",
+        }[v],
+        horizontal=False,
+        help="Current = shipped behavior. Coverage-dominant = experimental, surfaces partial-coverage platters more aggressively.",
     )
 
 search_clicked = st.button("Search", type="primary", disabled=not selected)
@@ -139,6 +150,7 @@ if search_clicked and selected:
             platters: list[PlatterResultV5] = search_platters_v5(
                 selected, top_k_per_item=5, top_n=10,
                 service_types=service_types or None,
+                ranker=ranker_choice,
             )
 
         if not platters:

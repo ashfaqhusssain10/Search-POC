@@ -43,15 +43,19 @@ SERVICE_TYPE_LABELS: dict[str, str] = {
     "Snack Box": "SNACKBOX",
 }
 
-# Scoring weights. Coverage is the dominant signal — we want platters that
-# cover all the user's dishes. Quality (avg similarity of matches) discriminates
-# between candidates with equal coverage. Specificity (= what fraction of the
-# platter's items the user actually asked for) tiebreaks among large
-# 100%-coverage platters so a focused 6-item platter ranks above a 30-item
-# everything-bag.
-COVERAGE_WEIGHT = 0.55
-QUALITY_WEIGHT = 0.30
-SPECIFICITY_WEIGHT = 0.15
+# Ranker profiles. Each is a (coverage_weight, quality_weight, specificity_weight,
+# display_floor) tuple. The display_floor is the per-hit similarity cutoff
+# below which v4 results are discarded before platter aggregation.
+#
+# "current"          : shipped behavior — 0.55/0.30/0.15, 0.80 floor. Don't touch.
+# "coverage_dominant": coverage-heavy, 0.65 floor so borderline-good substitutes
+#                      (e.g. Achari Chicken Curry → Chicken Curry @ 0.788) can
+#                      contribute to platter coverage instead of being wiped.
+RANKER_PROFILES: dict[str, tuple[float, float, float, float]] = {
+    "current":           (0.55, 0.30, 0.15, 0.80),
+    "coverage_dominant": (0.70, 0.20, 0.10, 0.65),
+}
+DEFAULT_RANKER = "current"
 
 
 # ---------------------------------------------------------------------------
@@ -88,6 +92,7 @@ class PlatterResultV5:
     matched_count: int
     total_query_dishes: int
     dish_matches: list[DishMatch]
+    ranker_used: str = DEFAULT_RANKER
     skeleton: list[SkeletonSlot] = field(default_factory=list)
     all_items: list[str] = field(default_factory=list)
 
@@ -131,17 +136,36 @@ def search_platters_v5(
     top_k_per_item: int = DEFAULT_TOP_K_PER_ITEM,
     top_n: int = DEFAULT_TOP_N_PLATTERS,
     service_types: list[str] | None = None,
+    ranker: str = DEFAULT_RANKER,
 ) -> list[PlatterResultV5]:
     """Find platters that best cover the user's dish selection.
 
-    Returns up to `top_n` platters sorted by a (coverage, quality) blend.
+    `ranker` selects the scoring profile:
+      - "current"          : shipped weights and 0.80 display floor.
+      - "coverage_dominant": coverage-weighted scoring with a 0.65 floor so
+                             borderline substitutes still contribute.
     """
     items = [i.strip() for i in items if i and i.strip()]
     if not items:
         return []
 
+    if ranker not in RANKER_PROFILES:
+        raise ValueError(
+            f"Unknown ranker {ranker!r}. Choose from: {sorted(RANKER_PROFILES)}"
+        )
+    coverage_w, quality_w, specificity_w, display_floor = RANKER_PROFILES[ranker]
+
     # ── 1. Item-level matching via v4 ─────────────────────────────────────
-    item_results = search_items_v4(items, top_k=top_k_per_item)
+    # Temporarily override v4's display floor so the ranker can choose how
+    # permissive item-level matching should be. Restored in `finally` so other
+    # callers (Item matches view, CLI) are unaffected.
+    import scripts.search_v4 as _v4
+    original_floor = _v4.ITEM_SCORE_THRESHOLD
+    _v4.ITEM_SCORE_THRESHOLD = display_floor
+    try:
+        item_results = search_items_v4(items, top_k=top_k_per_item)
+    finally:
+        _v4.ITEM_SCORE_THRESHOLD = original_floor
 
     # canonical_name → {query_dish: best_score_for_this_pair}
     # Tracking best-score-per-pair lets us pick the single best dish→canonical
@@ -220,9 +244,9 @@ def search_platters_v5(
         denominator = intended_slot_count or (len(row["all_items"]) or 1)
         specificity = min(matched_count / denominator, 1.0)
         final_score = (
-            COVERAGE_WEIGHT * coverage
-            + QUALITY_WEIGHT * quality
-            + SPECIFICITY_WEIGHT * specificity
+            coverage_w * coverage
+            + quality_w * quality
+            + specificity_w * specificity
         )
 
         results.append(PlatterResultV5(
@@ -240,6 +264,7 @@ def search_platters_v5(
             matched_count=matched_count,
             total_query_dishes=n_dishes,
             dish_matches=dish_matches,
+            ranker_used=ranker,
             skeleton=skeleton,
             all_items=row["all_items"],
         ))
