@@ -104,6 +104,11 @@ if view == "Platters":
         horizontal=False,
         help="Current = shipped behavior. Coverage-dominant = experimental, surfaces partial-coverage platters more aggressively.",
     )
+    enable_fallback = st.checkbox(
+        "Enable in-platter substitute fallback",
+        value=False,
+        help="For dishes left uncovered, look inside each candidate platter for a close substitute (T≥0.70, veg+form guarded). Rescued matches are tagged as substitutes.",
+    )
 
 search_clicked = st.button("Search", type="primary", disabled=not selected)
 
@@ -151,6 +156,7 @@ if search_clicked and selected:
                 selected, top_k_per_item=5, top_n=10,
                 service_types=service_types or None,
                 ranker=ranker_choice,
+                enable_fallback=enable_fallback,
             )
 
         if not platters:
@@ -184,7 +190,12 @@ if search_clicked and selected:
                     st.markdown("**Your dishes:**")
                     for m in p.dish_matches:
                         if m.matched_canonical:
-                            if m.matched_canonical.lower() == m.query_item.lower():
+                            if m.is_substitute:
+                                st.write(
+                                    f"🔄 **{m.query_item}** → **{m.matched_canonical}** "
+                                    f"_(close match, score {m.score:.2f})_"
+                                )
+                            elif m.matched_canonical.lower() == m.query_item.lower():
                                 st.write(f"✅ **{m.query_item}** _(score {m.score:.2f})_")
                             else:
                                 st.write(

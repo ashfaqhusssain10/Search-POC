@@ -26,8 +26,59 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
+import numpy as np
+
 from core.connections import close_connections, get_qdrant_client, neo4j_session
 from scripts.search_v4 import ItemHit, search_items_v4
+
+ALIAS_COLLECTION = "searchpoc_aliases"
+CANONICAL_COLLECTION = "searchpoc_canonicals"
+
+# In-platter substitute fallback. For dishes that v4 left uncovered, we check
+# whether any item already in the platter is close enough in vector space —
+# guarded by veg_type and form — to count as a substitute.
+#
+# Thresholds are calibrated per-form by `scripts/calibrate_form_thresholds.py`
+# + manual review of borderline pairs. Different forms cluster very
+# differently in embedding space (breads cluster loosely at 0.55-0.65,
+# kebabs tightly at 0.78+), so one global floor is structurally wrong.
+# Forms not listed here (or with too few catalog samples) fall back to
+# FALLBACK_THRESHOLD_GLOBAL.
+FALLBACK_THRESHOLD_GLOBAL = 0.70
+
+FORM_THRESHOLDS: dict[str, float] = {
+    "baked good":      0.70,
+    "beverage":        0.63,
+    "condiment":       0.65,
+    "dal":             0.70,
+    "dry dish":        0.70,
+    "egg dish":        0.61,
+    "flatbread":       0.55,
+    "gravy dish":      0.67,
+    "kebab":           0.72,
+    "main dish":       0.65,
+    "pasta & noodles": 0.60,
+    "rice dish":       0.70,
+    "sandwich & wrap": 0.70,
+    "snack":           0.64,
+    "soup":            0.58,
+    "sweet dish":      0.55,
+}
+
+
+def _threshold_for_form(form: str | None) -> float:
+    """Return the calibrated floor for this form, or the global default."""
+    if not form:
+        return FALLBACK_THRESHOLD_GLOBAL
+    return FORM_THRESHOLDS.get(form.strip().lower(), FALLBACK_THRESHOLD_GLOBAL)
+
+# Mirrors v4.FORM_FAMILIES so the fallback uses the same form-equivalence
+# rules as direct search.
+FORM_FAMILIES: list[set[str]] = [
+    {"gravy", "stew"},
+    {"dry-fry", "snack"},
+    {"soup", "stew"},
+]
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -67,6 +118,7 @@ class DishMatch:
     query_item: str
     matched_canonical: str | None  # None if no item in this platter matched the dish
     score: float                   # similarity score from v4 (0 if unmatched)
+    is_substitute: bool = False    # True if rescued by in-platter fallback (not a direct v4 match)
 
 
 @dataclass
@@ -128,6 +180,71 @@ RETURN p.id AS id,
 
 
 # ---------------------------------------------------------------------------
+# In-platter fallback helpers
+# ---------------------------------------------------------------------------
+
+def _cosine(a: np.ndarray, b: np.ndarray) -> float:
+    na = float(np.linalg.norm(a))
+    nb = float(np.linalg.norm(b))
+    if na == 0.0 or nb == 0.0:
+        return 0.0
+    return float(np.dot(a, b) / (na * nb))
+
+
+def _veg_compatible(query_veg: str | None, cand_veg: str | None) -> bool:
+    """Same rules as v4: VEG↔VEG, NONVEG↔NONVEG, EGG↔{EGG,NONVEG}. Unknown = pass."""
+    if not query_veg or not cand_veg:
+        return True
+    q, c = query_veg.upper(), cand_veg.upper()
+    if q == "VEG":
+        return c == "VEG"
+    if q == "NONVEG":
+        return c == "NONVEG"
+    if q == "EGG":
+        return c in ("EGG", "NONVEG")
+    return True
+
+
+def _forms_compatible(a: str | None, b: str | None) -> bool:
+    if not a or not b:
+        return True
+    a, b = a.strip().lower(), b.strip().lower()
+    if a == b:
+        return True
+    for fam in FORM_FAMILIES:
+        if a in fam and b in fam:
+            return True
+    return False
+
+
+def _scroll_meta(qdrant, collection: str, names: set[str]) -> dict[str, tuple[np.ndarray, str | None, str | None]]:
+    """Return name → (vector, veg_type, form) for the requested names."""
+    if not names:
+        return {}
+    out: dict[str, tuple[np.ndarray, str | None, str | None]] = {}
+    next_offset = None
+    while True:
+        points, next_offset = qdrant.scroll(
+            collection_name=collection,
+            offset=next_offset,
+            limit=200,
+            with_payload=True,
+            with_vectors=True,
+        )
+        for p in points:
+            n = p.payload.get("name") if p.payload else None
+            if n in names and n not in out:
+                out[n] = (
+                    np.asarray(p.vector, dtype=np.float32),
+                    p.payload.get("veg_type"),
+                    p.payload.get("form"),
+                )
+        if next_offset is None or len(out) == len(names):
+            break
+    return out
+
+
+# ---------------------------------------------------------------------------
 # Core
 # ---------------------------------------------------------------------------
 
@@ -137,6 +254,7 @@ def search_platters_v5(
     top_n: int = DEFAULT_TOP_N_PLATTERS,
     service_types: list[str] | None = None,
     ranker: str = DEFAULT_RANKER,
+    enable_fallback: bool = False,
 ) -> list[PlatterResultV5]:
     """Find platters that best cover the user's dish selection.
 
@@ -197,12 +315,29 @@ def search_platters_v5(
         ))
     log.info("Found %d candidate platters", len(rows))
 
+    # ── 2b. Pre-fetch vectors for the in-platter fallback (optional) ──────
+    # We only fetch when the fallback is enabled. One scroll per collection
+    # covers all candidate platters' items + all the user's query dishes.
+    query_meta: dict[str, tuple[np.ndarray, str | None, str | None]] = {}
+    canon_meta: dict[str, tuple[np.ndarray, str | None, str | None]] = {}
+    if enable_fallback:
+        from core.connections import get_qdrant_client  # local import keeps cold path cheap
+        qdrant = get_qdrant_client()
+        query_meta = _scroll_meta(qdrant, ALIAS_COLLECTION, set(items))
+        all_platter_items: set[str] = set()
+        for row in rows:
+            all_platter_items |= set(row["all_items"])
+        canon_meta = _scroll_meta(qdrant, CANONICAL_COLLECTION, all_platter_items)
+        log.info("Fallback enabled: %d query vectors, %d canonical vectors loaded",
+                 len(query_meta), len(canon_meta))
+
     # ── 3. Score each platter ─────────────────────────────────────────────
     n_dishes = len(items)
     results: list[PlatterResultV5] = []
 
     for row in rows:
         platter_items: list[str] = row["matched_items"]  # canonicals in this platter that matched something
+        all_platter_items_row: list[str] = row["all_items"]
         # For each user dish, find the best canonical in this platter that mapped to it.
         dish_matches: list[DishMatch] = []
         match_scores: list[float] = []
@@ -214,7 +349,36 @@ def search_platters_v5(
                 if score > best_score:
                     best_score = score
                     best_canonical = canonical
-            dish_matches.append(DishMatch(query_dish, best_canonical, best_score))
+
+            is_substitute = False
+            # In-platter fallback: only fires when v4 produced no direct match
+            # AND we have a query vector AND a guarded substitute exists.
+            if best_canonical is None and enable_fallback and query_dish in query_meta:
+                qv, q_veg, q_form = query_meta[query_dish]
+                sub_name: str | None = None
+                sub_score = 0.0
+                for cname in all_platter_items_row:
+                    cmeta = canon_meta.get(cname)
+                    if cmeta is None:
+                        continue
+                    cv, c_veg, c_form = cmeta
+                    if not _veg_compatible(q_veg, c_veg):
+                        continue
+                    if not _forms_compatible(q_form, c_form):
+                        continue
+                    s = _cosine(qv, cv)
+                    if s > sub_score:
+                        sub_score = s
+                        sub_name = cname
+                # Per-form floor: a flatbread query uses the flatbread floor
+                # (0.60), a kebab query uses the kebab floor (0.72), etc.
+                threshold = _threshold_for_form(q_form)
+                if sub_name is not None and sub_score >= threshold:
+                    best_canonical = sub_name
+                    best_score = sub_score
+                    is_substitute = True
+
+            dish_matches.append(DishMatch(query_dish, best_canonical, best_score, is_substitute))
             if best_canonical is not None:
                 match_scores.append(best_score)
 
