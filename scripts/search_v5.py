@@ -28,7 +28,8 @@ from typing import Any
 
 import numpy as np
 
-from core.connections import close_connections, get_qdrant_client, neo4j_session
+from core.connections import close_connections, get_qdrant_client
+from core.platter_cache import get_cache as get_platter_cache
 from scripts.search_v4 import ItemHit, search_items_v4
 
 ALIAS_COLLECTION = "searchpoc_aliases"
@@ -54,7 +55,7 @@ FORM_THRESHOLDS: dict[str, float] = {
     "dry dish":        0.70,
     "egg dish":        0.61,
     "flatbread":       0.55,
-    "gravy dish":      0.67,
+    "gravy dish":      0.60,
     "kebab":           0.72,
     "main dish":       0.65,
     "pasta & noodles": 0.60,
@@ -305,14 +306,13 @@ def search_platters_v5(
              len(candidate_canonicals), len(items))
 
     # ── 2. Pull every platter that contains any candidate canonical ───────
-    # `service_types` is passed as None when the user wants no filter — the
-    # Cypher uses a null-aware predicate so a single query handles both cases.
-    with neo4j_session() as session:
-        rows = list(session.run(
-            FETCH_PLATTERS_QUERY,
-            canonical_names=candidate_canonicals,
-            service_types=service_types if service_types else None,
-        ))
+    # Platter data now comes from a DynamoDB-backed in-memory cache instead
+    # of Neo4j — the search wasn't using any graph features, and reading from
+    # the live DDB tables keeps us in sync with catering ops automatically.
+    rows = get_platter_cache().fetch_for_canonicals(
+        candidate_canonicals,
+        service_types=service_types if service_types else None,
+    )
     log.info("Found %d candidate platters", len(rows))
 
     # ── 2b. Pre-fetch vectors for the in-platter fallback (optional) ──────

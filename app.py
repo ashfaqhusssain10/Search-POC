@@ -17,6 +17,7 @@ from scripts.search_v5 import (
     PlatterResultV5,
     search_platters_v5,
 )
+from scripts.search_v6 import search_platters_v6
 
 # ── Older paths (kept for easy revert) ──────────────────────────────────────
 # from scripts.search import PlatterResult, search_platters             # v1: community-based
@@ -109,6 +110,14 @@ if view == "Platters":
         value=False,
         help="For dishes left uncovered, look inside each candidate platter for a close substitute (T≥0.70, veg+form guarded). Rescued matches are tagged as substitutes.",
     )
+    # LLM-judge toggle hidden for now — v6 + Bedrock Haiku 4.5 still wired in
+    # search_v6.py and ready to re-enable if a hard query case needs it.
+    # enable_llm_judge = st.checkbox(
+    #     "Use LLM judge (Claude Haiku 4.5) — v6",
+    #     value=False,
+    #     help="Replaces the threshold-based fallback with an LLM that judges each uncovered dish against the platter's items and explains why. Slower (~1s) but precise.",
+    # )
+    enable_llm_judge = False
 
 search_clicked = st.button("Search", type="primary", disabled=not selected)
 
@@ -152,12 +161,20 @@ if search_clicked and selected:
     else:
         service_types = [SERVICE_TYPE_LABELS[label] for label in selected_service_labels]
         with st.spinner("Finding platters..."):
-            platters: list[PlatterResultV5] = search_platters_v5(
-                selected, top_k_per_item=5, top_n=10,
-                service_types=service_types or None,
-                ranker=ranker_choice,
-                enable_fallback=enable_fallback,
-            )
+            if enable_llm_judge:
+                platters = search_platters_v6(
+                    selected, top_k_per_item=5, top_n=10,
+                    service_types=service_types or None,
+                    ranker=ranker_choice,
+                    enable_llm_judge=True,
+                )
+            else:
+                platters: list[PlatterResultV5] = search_platters_v5(
+                    selected, top_k_per_item=5, top_n=10,
+                    service_types=service_types or None,
+                    ranker=ranker_choice,
+                    enable_fallback=enable_fallback,
+                )
 
         if not platters:
             st.warning("No matching platters found.")
@@ -191,9 +208,11 @@ if search_clicked and selected:
                     for m in p.dish_matches:
                         if m.matched_canonical:
                             if m.is_substitute:
+                                reason = getattr(m, "substitute_reason", None)
+                                reason_suffix = f" — _{reason}_" if reason else ""
                                 st.write(
                                     f"🔄 **{m.query_item}** → **{m.matched_canonical}** "
-                                    f"_(close match, score {m.score:.2f})_"
+                                    f"_(close match, score {m.score:.2f})_{reason_suffix}"
                                 )
                             elif m.matched_canonical.lower() == m.query_item.lower():
                                 st.write(f"✅ **{m.query_item}** _(score {m.score:.2f})_")
