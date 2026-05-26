@@ -96,6 +96,31 @@ SERVICE_TYPE_LABELS: dict[str, str] = {
 }
 
 
+# --- DEPRECATED: ranker profiles removed in favour of fixed weights ----------
+# Previously toggled between two named "ranker" profiles. Now locked to the
+# "current" profile; per-hit display floor moved into FORM_THRESHOLDS.
+# Kept commented as historical context — restore only if A/B ranker
+# experiments are deliberately reintroduced.
+#
+# RANKER_PROFILES: dict[str, tuple[float, float, float, float]] = {
+#     "current":           (0.55, 0.30, 0.15, 0.80),
+#     "coverage_dominant": (0.70, 0.20, 0.10, 0.65),
+# }
+# -----------------------------------------------------------------------------
+
+# Fixed scoring weights (was the "current" ranker). Production-locked; change
+# only via a deliberate scoring change with an eval-set comparison.
+COVERAGE_WEIGHT = 0.55
+QUALITY_WEIGHT = 0.30
+SPECIFICITY_WEIGHT = 0.15
+
+# Permissive pre-form-floor cutoff handed to v4. v4 returns every candidate
+# above this; v5 then applies the per-form threshold for the user's dish.
+V4_CANDIDATE_FLOOR = 0.50
+
+# Sentinel kept for backwards-compatible callers / log messages.
+DEFAULT_RANKER = "fixed"
+
 
 # ---------------------------------------------------------------------------
 # Result types
