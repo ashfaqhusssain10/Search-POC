@@ -74,6 +74,9 @@ class ItemQueryResult:
     veg_type: str | None
     hits: list[ItemHit]
     query_embedding_text: str | None = None
+    # Form of the queried alias, surfaced so callers (v5) can apply per-form
+    # display thresholds without re-querying the alias collection.
+    query_form: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -213,12 +216,17 @@ def search_items_v4(items: list[str], top_k: int = DEFAULT_TOP_K) -> list[ItemQu
 
     results: list[ItemQueryResult] = []
     hit_names_collected: set[str] = set()
-    pending: list[tuple[str, list, str | None]] = []  # (query_item, hits_raw, veg)
+    pending: list[tuple[str, list, str | None, str | None]] = []  # (query_item, hits_raw, veg, form)
 
     for item in items:
         vec = name_to_vector.get(item)
         if vec is None:
-            results.append(ItemQueryResult(query_item=item, veg_type=item_to_item_type.get(item), hits=[]))
+            results.append(ItemQueryResult(
+                query_item=item,
+                veg_type=item_to_item_type.get(item),
+                hits=[],
+                query_form=name_to_form.get(item),
+            ))
             continue
         veg = item_to_item_type.get(item)
         form = name_to_form.get(item)
@@ -230,7 +238,7 @@ def search_items_v4(items: list[str], top_k: int = DEFAULT_TOP_K) -> list[ItemQu
             with_payload=True,
             query_filter=_build_filter(veg, form),
         ).points
-        pending.append((item, hits_raw, veg))
+        pending.append((item, hits_raw, veg, form))
         for h in hits_raw:
             n = h.payload.get("name") if h.payload else None
             if n:
@@ -243,7 +251,7 @@ def search_items_v4(items: list[str], top_k: int = DEFAULT_TOP_K) -> list[ItemQu
             for r in session.run(FETCH_CANONICAL_DESCRIPTIONS_QUERY, names=list(hit_names_collected)):
                 canonical_descs[r["name"]] = r["llm_description"]
 
-    for item, hits_raw, veg in pending:
+    for item, hits_raw, veg, form in pending:
         hits = [
             ItemHit(
                 name=h.payload.get("name", ""),
@@ -267,6 +275,7 @@ def search_items_v4(items: list[str], top_k: int = DEFAULT_TOP_K) -> list[ItemQu
                 query_embedding_text=build_item_embedding_text(
                     name=item, llm_description=item_to_alias_desc.get(item)
                 ),
+                query_form=form,
             )
         )
 

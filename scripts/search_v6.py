@@ -43,14 +43,18 @@ from core.connections import close_connections, get_qdrant_client
 from core.platter_cache import get_cache as get_platter_cache
 from scripts.search_v4 import search_items_v4
 from scripts.search_v5 import (
+    COVERAGE_WEIGHT,
     DEFAULT_RANKER,
     DEFAULT_TOP_K_PER_ITEM,
     DEFAULT_TOP_N_PLATTERS,
-    RANKER_PROFILES,
+    QUALITY_WEIGHT,
+    SPECIFICITY_WEIGHT,
     SERVICE_TYPE_LABELS,
     SkeletonSlot,
+    V4_CANDIDATE_FLOOR,
     _cosine,
     _scroll_meta,
+    _threshold_for_form,
     _veg_compatible,
 )
 
@@ -84,7 +88,6 @@ __all__ = [
     "DishMatchV6",
     "SkeletonSlot",
     "SERVICE_TYPE_LABELS",
-    "RANKER_PROFILES",
 ]
 
 
@@ -316,22 +319,28 @@ def search_platters_v6(
     top_k_per_item: int = DEFAULT_TOP_K_PER_ITEM,
     top_n: int = DEFAULT_TOP_N_PLATTERS,
     service_types: list[str] | None = None,
-    ranker: str = DEFAULT_RANKER,
+    ranker: str = DEFAULT_RANKER,  # kept for back-compat; ignored
     enable_llm_judge: bool = False,
 ) -> list[PlatterResultV6]:
-    """Same shape as v5 but uses Claude Haiku 4.5 to judge substitutes."""
+    """Same shape as v5 but uses Claude Haiku 4.5 to judge substitutes.
+
+    Scoring is fixed (no ranker selection); per-form thresholds gate the
+    item-level matches, identical to v5. `ranker` accepted but ignored.
+    """
     items = [i.strip() for i in items if i and i.strip()]
     if not items:
         return []
 
-    if ranker not in RANKER_PROFILES:
-        raise ValueError(f"Unknown ranker {ranker!r}. Choose from {sorted(RANKER_PROFILES)}")
-    coverage_w, quality_w, specificity_w, display_floor = RANKER_PROFILES[ranker]
+    if ranker != DEFAULT_RANKER:
+        log.info("Ignoring legacy ranker=%r — fixed weights in effect", ranker)
+    coverage_w = COVERAGE_WEIGHT
+    quality_w = QUALITY_WEIGHT
+    specificity_w = SPECIFICITY_WEIGHT
 
-    # ── 1. v4 with the ranker's display floor ────────────────────────────
+    # ── 1. v4 with a permissive global floor; per-form floor applied below ─
     import scripts.search_v4 as _v4
     original_floor = _v4.ITEM_SCORE_THRESHOLD
-    _v4.ITEM_SCORE_THRESHOLD = display_floor
+    _v4.ITEM_SCORE_THRESHOLD = V4_CANDIDATE_FLOOR
     try:
         item_results = search_items_v4(items, top_k=top_k_per_item)
     finally:
@@ -339,7 +348,10 @@ def search_platters_v6(
 
     canonical_to_dish_scores: dict[str, dict[str, float]] = {}
     for r in item_results:
+        floor = _threshold_for_form(r.query_form)
         for h in r.hits:
+            if h.score < floor:
+                continue
             slot = canonical_to_dish_scores.setdefault(h.name, {})
             prev = slot.get(r.query_item, 0.0)
             if h.score > prev:

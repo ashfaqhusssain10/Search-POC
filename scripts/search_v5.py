@@ -95,19 +95,32 @@ SERVICE_TYPE_LABELS: dict[str, str] = {
     "Snack Box": "SNACKBOX",
 }
 
-# Ranker profiles. Each is a (coverage_weight, quality_weight, specificity_weight,
-# display_floor) tuple. The display_floor is the per-hit similarity cutoff
-# below which v4 results are discarded before platter aggregation.
+# --- DEPRECATED: ranker profiles removed in favour of fixed weights ----------
+# The system previously toggled between two named "ranker" profiles. We've
+# locked weights to the "current" profile and moved the per-hit display floor
+# logic into FORM_THRESHOLDS (per-form). Kept here, commented, as historical
+# context — restore only if we deliberately reintroduce experimental rankers.
 #
-# "current"          : shipped behavior — 0.55/0.30/0.15, 0.80 floor. Don't touch.
-# "coverage_dominant": coverage-heavy, 0.65 floor so borderline-good substitutes
-#                      (e.g. Achari Chicken Curry → Chicken Curry @ 0.788) can
-#                      contribute to platter coverage instead of being wiped.
-RANKER_PROFILES: dict[str, tuple[float, float, float, float]] = {
-    "current":           (0.55, 0.30, 0.15, 0.80),
-    "coverage_dominant": (0.70, 0.20, 0.10, 0.65),
-}
-DEFAULT_RANKER = "current"
+# RANKER_PROFILES: dict[str, tuple[float, float, float, float]] = {
+#     "current":           (0.55, 0.30, 0.15, 0.80),
+#     "coverage_dominant": (0.70, 0.20, 0.10, 0.65),
+# }
+# DEFAULT_RANKER = "current"
+# -----------------------------------------------------------------------------
+
+# Fixed scoring weights (was "current" ranker). Production-locked; change only
+# via a deliberate scoring change with an eval-set comparison.
+COVERAGE_WEIGHT = 0.55
+QUALITY_WEIGHT = 0.30
+SPECIFICITY_WEIGHT = 0.15
+
+# Pre-form-floor cutoff handed to v4. We deliberately keep this permissive
+# (well below any per-form threshold) so v4 returns every candidate that any
+# form's threshold might accept; v5 then applies the per-form floor.
+V4_CANDIDATE_FLOOR = 0.50
+
+# Sentinel kept for backwards-compatible callers / log messages.
+DEFAULT_RANKER = "fixed"
 
 
 # ---------------------------------------------------------------------------
@@ -254,33 +267,35 @@ def search_platters_v5(
     top_k_per_item: int = DEFAULT_TOP_K_PER_ITEM,
     top_n: int = DEFAULT_TOP_N_PLATTERS,
     service_types: list[str] | None = None,
-    ranker: str = DEFAULT_RANKER,
+    ranker: str = DEFAULT_RANKER,  # kept for back-compat with older callers; ignored
     enable_fallback: bool = False,
 ) -> list[PlatterResultV5]:
     """Find platters that best cover the user's dish selection.
 
-    `ranker` selects the scoring profile:
-      - "current"          : shipped weights and 0.80 display floor.
-      - "coverage_dominant": coverage-weighted scoring with a 0.65 floor so
-                             borderline substitutes still contribute.
+    Scoring is fixed (no ranker selection):
+      - weights = (0.55 coverage, 0.30 quality, 0.15 specificity)
+      - per-hit floor is decided per-form via FORM_THRESHOLDS; v4 returns
+        candidates above V4_CANDIDATE_FLOOR, v5 then drops hits below the
+        floor for the user's form.
+
+    `ranker` is accepted for backwards-compat (older app.py builds passed
+    it). The value is logged once and otherwise ignored.
     """
     items = [i.strip() for i in items if i and i.strip()]
     if not items:
         return []
 
-    if ranker not in RANKER_PROFILES:
-        raise ValueError(
-            f"Unknown ranker {ranker!r}. Choose from: {sorted(RANKER_PROFILES)}"
-        )
-    coverage_w, quality_w, specificity_w, display_floor = RANKER_PROFILES[ranker]
+    if ranker != DEFAULT_RANKER:
+        log.info("Ignoring legacy ranker=%r — fixed weights in effect", ranker)
+    coverage_w, quality_w, specificity_w = COVERAGE_WEIGHT, QUALITY_WEIGHT, SPECIFICITY_WEIGHT
 
     # ── 1. Item-level matching via v4 ─────────────────────────────────────
-    # Temporarily override v4's display floor so the ranker can choose how
-    # permissive item-level matching should be. Restored in `finally` so other
-    # callers (Item matches view, CLI) are unaffected.
+    # v4 returns candidates above a permissive global floor. v5 then applies
+    # the per-form threshold so each user dish's "is this hit good enough?"
+    # decision is form-aware.
     import scripts.search_v4 as _v4
     original_floor = _v4.ITEM_SCORE_THRESHOLD
-    _v4.ITEM_SCORE_THRESHOLD = display_floor
+    _v4.ITEM_SCORE_THRESHOLD = V4_CANDIDATE_FLOOR
     try:
         item_results = search_items_v4(items, top_k=top_k_per_item)
     finally:
@@ -289,9 +304,14 @@ def search_platters_v5(
     # canonical_name → {query_dish: best_score_for_this_pair}
     # Tracking best-score-per-pair lets us pick the single best dish→canonical
     # mapping when one canonical appears in the hits of multiple queries.
+    # Per-form filter applied here: drop hits below the threshold for the
+    # user's form before they ever enter the platter-scoring loop.
     canonical_to_dish_scores: dict[str, dict[str, float]] = {}
     for r in item_results:
+        floor = _threshold_for_form(r.query_form)
         for h in r.hits:
+            if h.score < floor:
+                continue
             slot = canonical_to_dish_scores.setdefault(h.name, {})
             prev = slot.get(r.query_item, 0.0)
             if h.score > prev:
