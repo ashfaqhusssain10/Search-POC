@@ -95,32 +95,6 @@ SERVICE_TYPE_LABELS: dict[str, str] = {
     "Snack Box": "SNACKBOX",
 }
 
-# --- DEPRECATED: ranker profiles removed in favour of fixed weights ----------
-# The system previously toggled between two named "ranker" profiles. We've
-# locked weights to the "current" profile and moved the per-hit display floor
-# logic into FORM_THRESHOLDS (per-form). Kept here, commented, as historical
-# context — restore only if we deliberately reintroduce experimental rankers.
-#
-# RANKER_PROFILES: dict[str, tuple[float, float, float, float]] = {
-#     "current":           (0.55, 0.30, 0.15, 0.80),
-#     "coverage_dominant": (0.70, 0.20, 0.10, 0.65),
-# }
-# DEFAULT_RANKER = "current"
-# -----------------------------------------------------------------------------
-
-# Fixed scoring weights (was "current" ranker). Production-locked; change only
-# via a deliberate scoring change with an eval-set comparison.
-COVERAGE_WEIGHT = 0.55
-QUALITY_WEIGHT = 0.30
-SPECIFICITY_WEIGHT = 0.15
-
-# Pre-form-floor cutoff handed to v4. We deliberately keep this permissive
-# (well below any per-form threshold) so v4 returns every candidate that any
-# form's threshold might accept; v5 then applies the per-form floor.
-V4_CANDIDATE_FLOOR = 0.50
-
-# Sentinel kept for backwards-compatible callers / log messages.
-DEFAULT_RANKER = "fixed"
 
 
 # ---------------------------------------------------------------------------
@@ -268,7 +242,7 @@ def search_platters_v5(
     top_n: int = DEFAULT_TOP_N_PLATTERS,
     service_types: list[str] | None = None,
     ranker: str = DEFAULT_RANKER,  # kept for back-compat with older callers; ignored
-    enable_fallback: bool = False,
+    enable_fallback: bool = True,
 ) -> list[PlatterResultV5]:
     """Find platters that best cover the user's dish selection.
 

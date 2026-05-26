@@ -108,11 +108,11 @@ if view == "Platters":
     #     horizontal=False,
     #     help="Current = shipped behavior. Coverage-dominant = experimental, surfaces partial-coverage platters more aggressively.",
     # )
-    enable_fallback = st.checkbox(
-        "Enable in-platter substitute fallback",
-        value=False,
-        help="For dishes left uncovered, look inside each candidate platter for a close substitute (T≥0.70, veg+form guarded). Rescued matches are tagged as substitutes.",
-    )
+    # In-platter substitute logic is now part of the main scoring path —
+    # always on, no UI toggle. For any user dish without a direct match in a
+    # platter, we look for the closest veg+form-compatible item that clears
+    # the per-form threshold. Code lives in search_v5.py.
+    enable_fallback = True
     # LLM-judge toggle hidden for now — v6 + Bedrock Haiku 4.5 still wired in
     # search_v6.py and ready to re-enable if a hard query case needs it.
     # enable_llm_judge = st.checkbox(
