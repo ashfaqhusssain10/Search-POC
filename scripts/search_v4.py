@@ -27,8 +27,8 @@ from core.embedding_text import build_item_embedding_text
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 log = logging.getLogger(__name__)
 
-ALIAS_COLLECTION = "searchpoc_aliases"
-CANONICAL_COLLECTION = "searchpoc_canonicals"
+ALIAS_COLLECTION = "searchpoc_aliases_noname"
+CANONICAL_COLLECTION = "searchpoc_canonicals_noname"
 DEFAULT_TOP_K = 5
 
 # Display floor: hits below this score are never surfaced to the user. Grounded
@@ -262,6 +262,7 @@ def search_items_v4(items: list[str], top_k: int = DEFAULT_TOP_K) -> list[ItemQu
                 embedding_text=build_item_embedding_text(
                     name=h.payload.get("name", ""),
                     llm_description=canonical_descs.get(h.payload.get("name", "")),
+                    include_name=False,
                 ),
                 tier=quality_tier(float(h.score)),
             )
@@ -273,7 +274,8 @@ def search_items_v4(items: list[str], top_k: int = DEFAULT_TOP_K) -> list[ItemQu
                 veg_type=veg,
                 hits=hits,
                 query_embedding_text=build_item_embedding_text(
-                    name=item, llm_description=item_to_alias_desc.get(item)
+                    name=item, llm_description=item_to_alias_desc.get(item),
+                    include_name=False,
                 ),
                 query_form=form,
             )

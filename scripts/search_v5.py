@@ -32,8 +32,8 @@ from core.connections import close_connections, get_qdrant_client
 from core.platter_cache import get_cache as get_platter_cache
 from scripts.search_v4 import ItemHit, search_items_v4
 
-ALIAS_COLLECTION = "searchpoc_aliases"
-CANONICAL_COLLECTION = "searchpoc_canonicals"
+ALIAS_COLLECTION = "searchpoc_aliases_noname"
+CANONICAL_COLLECTION = "searchpoc_canonicals_noname"
 
 # In-platter substitute fallback. For dishes that v4 left uncovered, we check
 # whether any item already in the platter is close enough in vector space —
@@ -48,22 +48,32 @@ CANONICAL_COLLECTION = "searchpoc_canonicals"
 FALLBACK_THRESHOLD_GLOBAL = 0.70
 
 FORM_THRESHOLDS: dict[str, float] = {
-    "baked good":      0.70,
-    "beverage":        0.63,
-    "condiment":       0.65,
-    "dal":             0.70,
-    "dry dish":        0.70,
-    "egg dish":        0.61,
-    "flatbread":       0.55,
-    "gravy dish":      0.60,
-    "kebab":           0.72,
-    "main dish":       0.65,
-    "pasta & noodles": 0.60,
-    "rice dish":       0.70,
-    "sandwich & wrap": 0.70,
-    "snack":           0.64,
-    "soup":            0.58,
-    "sweet dish":      0.55,
+    # Recalibrated 2026-05 for no-name embeddings (Variant B). Floors are
+    # max(in_p25, out_p99) from analyze_form_thresholds_noname.py, with manual
+    # overrides for forms where the auto-recommendation was over-aggressive
+    # (kebab/egg/salad/soup/mouth_freshener/flatbread — see test_top1_noname
+    # REGRESSION inspection). Source data: diagnostics/form_threshold_*.csv.
+    "baked good":      0.62,
+    "beverage":        0.64,
+    "condiment":       0.73,
+    "dairy dish":      0.76,
+    "dal":             0.79,
+    "dry dish":        0.78,
+    "egg dish":        0.65,  # override (analyzer: 0.72)
+    "flatbread":       0.78,  # override (analyzer: 0.82)
+    "fruit":           0.68,
+    "gravy dish":      0.77,
+    "kebab":           0.85,  # override (analyzer: 0.89)
+    "main dish":       0.76,
+    "mouth freshener": 0.85,  # override (analyzer: 0.94)
+    "pasta & noodles": 0.67,
+    "pizza":           0.62,
+    "rice dish":       0.78,
+    "salad":           0.65,  # override (analyzer: 0.75)
+    "sandwich & wrap": 0.69,
+    "snack":           0.75,
+    "soup":            0.66,  # override (analyzer: 0.75)
+    "sweet dish":      0.70,
 }
 
 

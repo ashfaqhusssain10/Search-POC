@@ -45,12 +45,19 @@ def _join(value: Any) -> str:
 def build_item_embedding_text(
     name: str,
     llm_description: str | dict | None = None,
+    include_name: bool = True,
 ) -> str:
     """Build the PM-spec embedding blob for a single item.
 
     `llm_description` is the JSON (or already-parsed dict) produced by
     `scripts.enrich_items`. All fields except `name` are optional — missing
     metadata is silently skipped.
+
+    When `include_name=False`, the dish name is omitted from the blob. This
+    produces a metadata-only embedding that performs better on cross-language
+    synonym pairs (e.g. Pulihora ↔ Tamarind Rice) at the cost of slightly
+    weaker discrimination on near-duplicate sibling dishes that share metadata
+    but differ in name (e.g. Chicken Biryani vs Mutton Biryani).
     """
     desc = _parse_description(llm_description)
 
@@ -63,7 +70,9 @@ def build_item_embedding_text(
     texture = (desc.get("texture") or "").strip()
     regional = (desc.get("regional_variant") or "").strip()
 
-    parts: list[str] = [f"{name}."]
+    parts: list[str] = []
+    if include_name and name:
+        parts.append(f"{name}.")
 
     header_bits = [
         b for b in (cuisine, category.lower() if category else "", sub_category.lower() if sub_category else "")
