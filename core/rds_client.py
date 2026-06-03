@@ -40,6 +40,14 @@ def _get_connection() -> pymysql.Connection:
         return _conn
 
 
+def get_alias_names() -> list[str]:
+    """Return all distinct alias names from item_similarity_resolution, sorted."""
+    conn = _get_connection()
+    with conn.cursor() as cur:
+        cur.execute("SELECT DISTINCT alias_name FROM item_similarity_resolution ORDER BY alias_name")
+        return [row["alias_name"] for row in cur.fetchall()]
+
+
 def get_resolutions_batch(alias_item_ids: list[str]) -> dict[str, dict[str, Any]]:
     """Fetch resolution records by alias_item_id. Returns {alias_item_id: record}."""
     if not alias_item_ids:

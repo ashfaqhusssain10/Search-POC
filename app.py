@@ -10,7 +10,8 @@ import os
 
 import streamlit as st
 
-from core import api_client, runtime_index
+from core import api_client
+from core.rds_client import get_alias_names
 from scripts.search_v4 import ItemQueryResult, search_items_v4
 from scripts.search_v5 import (
     SERVICE_TYPE_LABELS,
@@ -56,9 +57,8 @@ if not _check_password():
 
 @st.cache_data(show_spinner="Loading dish list...")
 def load_canonical_items() -> list[str]:
-    """Load canonical dish names from the S3 runtime index."""
-    index = runtime_index.load()
-    return sorted(index.canonical_meta.keys())
+    """Load alias dish names from RDS."""
+    return get_alias_names()
 
 
 # ---------------------------------------------------------------------------
