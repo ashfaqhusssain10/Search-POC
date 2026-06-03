@@ -334,6 +334,5 @@ def main() -> None:
 
     log.info("Done. Both CSVs enriched with llm_description column.")
 
-
 if __name__ == "__main__":
     main()

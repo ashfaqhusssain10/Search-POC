@@ -49,6 +49,40 @@ def noname_text(item: dict) -> str:
     return full.lstrip(". ").strip()
 
 
+def propagate_canonical_descriptions(
+    canonicals: list[dict],
+    aliases: list[dict],
+) -> int:
+    """For aliases whose name matches a canonical, copy the canonical's
+    llm_description to the alias so both sides produce the same embedding text.
+
+    This fixes the "Curd ↔ Curd = 0.75" problem: independent Gemini enrichment
+    runs produced different metadata for the same dish, and without the name
+    anchor the vectors diverge. By aligning the metadata, identical items get
+    identical vectors (score ≈ 1.0).
+
+    Returns the number of aliases overridden.
+    """
+    # Build canonical name → llm_description lookup (case-insensitive)
+    canon_desc: dict[str, str] = {}
+    for c in canonicals:
+        name = (c.get("name") or "").strip().lower()
+        desc = c.get("llm_description")
+        if name and desc:
+            canon_desc[name] = desc
+
+    overridden = 0
+    for alias in aliases:
+        alias_name = (alias.get("name") or "").strip().lower()
+        if alias_name in canon_desc:
+            old = alias.get("llm_description")
+            new = canon_desc[alias_name]
+            if old != new:
+                alias["llm_description"] = new
+                overridden += 1
+    return overridden
+
+
 def main() -> None:
     client = OpenAI(api_key=OPENAI_API_KEY)
     qdrant = get_qdrant_client()
@@ -64,6 +98,13 @@ def main() -> None:
         "Fetched %d canonicals (%d dropped, no llm_description), %d aliases (%d dropped).",
         len(canonicals), canon_before - len(canonicals),
         len(aliases), alias_before - len(aliases),
+    )
+
+    # ── Fix same-name divergence ──────────────────────────────────────────
+    overridden = propagate_canonical_descriptions(canonicals, aliases)
+    log.info(
+        "Propagated canonical descriptions to %d same-name aliases.",
+        overridden,
     )
 
     # ── Canonicals (no-name) ───────────────────────────────────────────────

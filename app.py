@@ -10,7 +10,7 @@ import os
 
 import streamlit as st
 
-from core.connections import neo4j_session
+from core import api_client, runtime_index
 from scripts.search_v4 import ItemQueryResult, search_items_v4
 from scripts.search_v5 import (
     SERVICE_TYPE_LABELS,
@@ -56,12 +56,9 @@ if not _check_password():
 
 @st.cache_data(show_spinner="Loading dish list...")
 def load_canonical_items() -> list[str]:
-    """Fetch all Supabase canonical item names from Neo4j, sorted."""
-    with neo4j_session() as session:
-        result = session.run(
-            "MATCH (i:Item {source: 'supabase'}) RETURN i.name AS name ORDER BY i.name"
-        )
-        return [r["name"] for r in result]
+    """Load canonical dish names from the S3 runtime index."""
+    index = runtime_index.load()
+    return sorted(index.canonical_meta.keys())
 
 
 # ---------------------------------------------------------------------------
@@ -91,6 +88,7 @@ selected_service_labels: list[str] = []
 # thresholds gate the per-hit floor. Toggle UI commented out, kept here in
 # case we deliberately reintroduce A/B ranker experiments.
 # ranker_choice = "current"
+use_api = False
 if view == "Platters":
     selected_service_labels = st.multiselect(
         label="Service type",
@@ -98,6 +96,12 @@ if view == "Platters":
         default=list(SERVICE_TYPE_LABELS.keys()),
         help="Restrict results to specific platter service types. Clear all to include every type.",
     )
+    if api_client.is_configured():
+        use_api = st.checkbox(
+            "Use deployed API (v7)",
+            value=True,
+            help=f"Calls the Lambda endpoint at {api_client.api_url()}. Uncheck to run v5/v6 in-process.",
+        )
     # ranker_choice = st.radio(
     #     "Ranker",
     #     options=["current", "coverage_dominant"],
@@ -164,7 +168,17 @@ if search_clicked and selected:
     else:
         service_types = [SERVICE_TYPE_LABELS[label] for label in selected_service_labels]
         with st.spinner("Finding platters..."):
-            if enable_llm_judge:
+            if use_api:
+                try:
+                    platters, api_version = api_client.search_platters_via_api(
+                        selected, top_n=10,
+                        service_types=service_types or None,
+                    )
+                    st.caption(f"Served by deployed API · artifact version `{api_version}`")
+                except RuntimeError as e:
+                    st.error(f"API call failed: {e}")
+                    platters = []
+            elif enable_llm_judge:
                 platters = search_platters_v6(
                     selected, top_k_per_item=5, top_n=10,
                     service_types=service_types or None,
