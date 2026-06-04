@@ -38,6 +38,7 @@ class RuntimeIndex:
     canonical_meta: dict[str, dict[str, Any]]  # name → {item_id, form, veg}
     alias_name_to_id: dict[str, str] = field(default_factory=dict)
     canonical_name_to_id: dict[str, str] = field(default_factory=dict)
+    alias_id_to_name: dict[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not self.alias_name_to_id:
@@ -48,6 +49,8 @@ class RuntimeIndex:
             self.canonical_name_to_id = {
                 n: m["item_id"] for n, m in self.canonical_meta.items() if m.get("item_id")
             }
+        if not self.alias_id_to_name:
+            self.alias_id_to_name = {v: k for k, v in self.alias_name_to_id.items()}
 
 
 _index: RuntimeIndex | None = None

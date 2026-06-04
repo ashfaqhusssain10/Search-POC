@@ -59,8 +59,13 @@ async def search(request: Request, x_api_key: str = Header(default="")) -> JSONR
         raise HTTPException(status_code=400, detail="`service_types` must be a list of strings")
 
     try:
-        results = search_platters_v7(dishes, top_n=top_n, service_types=service_types)
-        version = runtime_index.load().version
+        index = runtime_index.load()
+        # Resolve sub_N IDs to alias names if the caller sent IDs instead of names
+        resolved_dishes = [
+            index.alias_id_to_name.get(d, d) for d in dishes
+        ]
+        results = search_platters_v7(resolved_dishes, top_n=top_n, service_types=service_types)
+        version = index.version
     except Exception as exc:
         log.exception("search failed")
         return JSONResponse(
