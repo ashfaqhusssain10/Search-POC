@@ -194,23 +194,35 @@ if search_clicked and selected:
         if not platters:
             st.warning("No matching platters found.")
         else:
+            # Rank by weighted_match_pct (PM spec), break ties with final_score
+            platters = sorted(
+                platters,
+                key=lambda r: (getattr(r, "weighted_match_pct", 0) or 0, r.final_score),
+                reverse=True,
+            )
             st.subheader(f"Top {len(platters)} platters")
             for i, p in enumerate(platters, 1):
                 veg_badge = "🟢 VEG" if p.veg is True else "🔴 NON-VEG" if p.veg is False else ""
                 price = f"₹{int(p.min_price)}" if p.min_price else "—"
                 meal_label = ", ".join(p.meal_type) if isinstance(p.meal_type, list) else (p.meal_type or "")
                 type_suffix = " · ".join(b for b in (p.platter_type or "", meal_label) if b)
+                wmp = getattr(p, "weighted_match_pct", None)
+                match_str = f"Match {wmp:.0f}%" if wmp is not None else f"score {p.final_score:.2f}"
                 header = (
                     f"#{i}  **{p.name}**  —  {p.matched_count}/{p.total_query_dishes} dishes  ·  "
-                    f"score {p.final_score:.2f}  |  {veg_badge}  {price}"
+                    f"{match_str}  |  {veg_badge}  {price}"
                 )
                 with st.expander(header, expanded=(i == 1)):
-                    c1, c2, c3, c4 = st.columns(4)
-                    c1.metric("Coverage", f"{p.coverage:.0%}")
-                    c2.metric("Avg quality", f"{p.quality:.2f}")
-                    c3.metric("Specificity", f"{p.specificity:.0%}",
+                    c1, c2, c3, c4, c5 = st.columns(5)
+                    if wmp is not None:
+                        c1.metric("Match %", f"{wmp:.0f}%", help="Category-weighted match score (PM spec)")
+                    else:
+                        c1.metric("Score", f"{p.final_score:.2f}")
+                    c2.metric("Coverage", f"{p.coverage:.0%}")
+                    c3.metric("Avg quality", f"{p.quality:.2f}")
+                    c4.metric("Specificity", f"{p.specificity:.0%}",
                               help="Fraction of the platter's intended slots filled by your selection.")
-                    c4.metric("Intended slots", p.intended_slot_count or len(p.all_items))
+                    c5.metric("Intended slots", p.intended_slot_count or len(p.all_items))
                     if type_suffix:
                         st.caption(type_suffix)
                     if p.skeleton:

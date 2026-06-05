@@ -11,7 +11,9 @@ COPY core/__init__.py        ${LAMBDA_TASK_ROOT}/core/__init__.py
 COPY core/categories.py      ${LAMBDA_TASK_ROOT}/core/categories.py
 COPY core/platter_cache.py   ${LAMBDA_TASK_ROOT}/core/platter_cache.py
 COPY core/rds_client.py      ${LAMBDA_TASK_ROOT}/core/rds_client.py
-COPY core/runtime_index.py   ${LAMBDA_TASK_ROOT}/core/runtime_index.py
+COPY core/runtime_index.py        ${LAMBDA_TASK_ROOT}/core/runtime_index.py
+COPY core/category_weights.json   ${LAMBDA_TASK_ROOT}/core/category_weights.json
+COPY core/ddb_resolution.py       ${LAMBDA_TASK_ROOT}/core/ddb_resolution.py
 COPY scripts/__init__.py     ${LAMBDA_TASK_ROOT}/scripts/__init__.py
 COPY scripts/search_v7.py    ${LAMBDA_TASK_ROOT}/scripts/search_v7.py
 COPY lambda/handler.py       ${LAMBDA_TASK_ROOT}/handler.py

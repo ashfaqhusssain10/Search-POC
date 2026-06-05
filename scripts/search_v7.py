@@ -20,12 +20,18 @@ CLI:
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
-from core import rds_client, runtime_index
+from core import ddb_resolution, runtime_index
 from core.platter_cache import get_cache as get_platter_cache
+
+_WEIGHTS_PATH = Path(__file__).resolve().parents[1] / "core" / "category_weights.json"
+_CATEGORY_WEIGHTS: dict[str, float] = json.loads(_WEIGHTS_PATH.read_text())
+_DEFAULT_WEIGHT = 0.5
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -77,6 +83,7 @@ class PlatterResultV7:
     matched_count: int
     total_query_dishes: int
     dish_matches: list[DishMatchV7]
+    weighted_match_pct: float = 0.0   # category-weighted match % (0–100)
     skeleton: list[SkeletonSlot] = field(default_factory=list)
     all_items: list[str] = field(default_factory=list)
 
@@ -121,8 +128,8 @@ def search_platters_v7(
 
     # ── 2. Batch-fetch resolution records from RDS
     known_ids = [i for i in dish_to_id.values() if i]
-    resolutions_by_id = rds_client.get_resolutions_batch(known_ids)
-    log.info("Resolved %d/%d aliases from RDS", len(resolutions_by_id), len(known_ids))
+    resolutions_by_id = ddb_resolution.get_many(known_ids)
+    log.info("Resolved %d/%d aliases from DynamoDB", len(resolutions_by_id), len(known_ids))
 
     # Per-dish resolution record (or None if missing/unknown)
     dish_to_resolution: dict[str, dict[str, Any] | None] = {
@@ -153,7 +160,18 @@ def search_platters_v7(
     )
     log.info("Found %d candidate platters", len(platters))
 
-    # ── 5. Score each platter
+    # ── 5. Pre-compute category weight per dish (constant across platters)
+    cache = get_platter_cache()
+    dish_weights: dict[str, float] = {}
+    for dish in user_dishes:
+        res = dish_to_resolution.get(dish)
+        item_id = res.get("best_canonical_item_id") if res else None
+        cat_name = cache.get_item_category_name(item_id) if item_id else None
+        dish_weights[dish] = _CATEGORY_WEIGHTS.get(cat_name, _DEFAULT_WEIGHT) if cat_name else _DEFAULT_WEIGHT
+    total_weight = sum(dish_weights.values()) or 1.0
+    log.info("Dish weights: %s", {d: dish_weights[d] for d in user_dishes})
+
+    # ── 6. Score each platter
     n_dishes = len(user_dishes)
     results: list[PlatterResultV7] = []
 
@@ -227,6 +245,19 @@ def search_platters_v7(
         coverage = matched_count / n_dishes
         quality = sum(match_scores) / matched_count if match_scores else 0.0
 
+        # Weighted match % — each dish contributes proportionally to its category weight
+        weighted_sum = 0.0
+        for m in dish_matches:
+            w = dish_weights.get(m.query_item, _DEFAULT_WEIGHT)
+            if m.matched_canonical and not m.is_substitute:
+                quality_score = 1.0
+            elif m.matched_canonical and m.is_substitute:
+                quality_score = 0.5
+            else:
+                quality_score = 0.0
+            weighted_sum += quality_score * w
+        weighted_match_pct = (weighted_sum / total_weight) * 100
+
         skeleton = _build_skeleton(row.get("skeleton_raw"))
         intended_slot_count = sum(s.slot_count for s in skeleton)
         denominator = intended_slot_count or (len(row["all_items"]) or 1)
@@ -252,6 +283,7 @@ def search_platters_v7(
             matched_count=matched_count,
             total_query_dishes=n_dishes,
             dish_matches=dish_matches,
+            weighted_match_pct=round(weighted_match_pct, 1),
             skeleton=skeleton,
             all_items=row["all_items"],
         ))

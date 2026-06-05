@@ -110,8 +110,9 @@ class PlatterCache:
         self._lock = threading.Lock()
         self._loaded = False
         self._platters: dict[str, PlatterRecord] = {}
-        # Reverse index: item_name → set[platter_id]
         self._item_to_platters: dict[str, set[str]] = {}
+        # item UUID → categoryName (ACTIVE categories only) — used for weighted scoring
+        self._item_id_to_category_name: dict[str, str] = {}
 
     # ── Loading ────────────────────────────────────────────────────────────
 
@@ -178,9 +179,18 @@ class PlatterCache:
                 active=active,
             )
 
-        # Categories (skeleton)
-        # Aggregate per platter: family → (slot_count, min_order)
+        # Categories (skeleton + item_id → category_name mapping)
         cat_rows = self._scan(PLATTER_CATEGORIES_TABLE)
+        # Build categoryId → categoryName for ACTIVE categories
+        category_id_to_name: dict[str, str] = {}
+        for r in cat_rows:
+            if _str(r.get("categoryPlatterActive")).upper() == "ACTIVE":
+                cid = _str(r.get("categoryId"))
+                name = _str(r.get("categoryName"))
+                if cid and name:
+                    category_id_to_name[cid] = name
+
+        # Aggregate per platter: family → (slot_count, min_order)
         per_platter_family: dict[str, dict[str, tuple[int, int]]] = {}
         for r in cat_rows:
             pid = _str(r.get("platterId"))
@@ -202,12 +212,17 @@ class PlatterCache:
                 for fam, (count, order) in sorted(fams.items(), key=lambda kv: kv[1][1])
             ]
 
-        # Items per platter
+        # Items per platter + item_id → category_name
         item_rows = self._scan(PLATTER_ITEMS_TABLE)
+        item_id_to_category_name: dict[str, str] = {}
         platter_items_set: dict[str, set[str]] = {}
         item_to_platters: dict[str, set[str]] = {}
         unresolved = 0
         for r in item_rows:
+            iid = _str(r.get("itemId"))
+            cid = _str(r.get("categoryId"))
+            if iid and cid and cid in category_id_to_name:
+                item_id_to_category_name[iid] = category_id_to_name[cid]
             pid = _str(r.get("platterId"))
             iid = _str(r.get("itemId"))
             if not pid or not iid or pid not in platters:
@@ -229,6 +244,7 @@ class PlatterCache:
 
         self._platters = platters
         self._item_to_platters = item_to_platters
+        self._item_id_to_category_name = item_id_to_category_name
         self._loaded = True
         log.info(
             "PlatterCache ready: %d platters, %d items, %d item→platter edges",
@@ -249,6 +265,11 @@ class PlatterCache:
         with self._lock:
             self._loaded = False
             self._build()
+
+    def get_item_category_name(self, item_id: str) -> str | None:
+        """Return the ACTIVE categoryName for a given item UUID, or None."""
+        self._ensure_loaded()
+        return self._item_id_to_category_name.get(item_id)
 
     # ── Public query ───────────────────────────────────────────────────────
 
